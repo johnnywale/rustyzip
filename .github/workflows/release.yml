@@ -2,14 +2,14 @@ name: Release
 
 on:
   release:
-    types: [published]
+    types: [ published ]
   workflow_dispatch:
     inputs:
       publish:
         description: 'Publish to PyPI'
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -56,8 +56,6 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist/*.whl
-
-  # Build wheels for Windows
   windows:
     name: Build Windows (${{ matrix.target }})
     runs-on: windows-latest
@@ -66,8 +64,7 @@ jobs:
       matrix:
         target:
           - x86_64-pc-windows-msvc
-          - i686-pc-windows-msvc
-          # - aarch64-pc-windows-msvc  # Uncomment when GitHub provides ARM64 Windows runners
+          # Removed i686 to avoid 32-bit Python mismatch
     steps:
       - uses: actions/checkout@v4
 
@@ -75,6 +72,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          architecture: x64  # Ensure 64-bit Python
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -88,6 +86,7 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.target }}
           path: dist/*.whl
+
 
   # Build wheels for macOS
   macos:
@@ -141,7 +140,7 @@ jobs:
   # Publish to PyPI
   publish:
     name: Publish to PyPI
-    needs: [linux, windows, macos, sdist]
+    needs: [ linux, windows, macos, sdist ]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     environment:
@@ -170,7 +169,7 @@ jobs:
   # Publish to TestPyPI (for testing releases)
   publish-testpypi:
     name: Publish to TestPyPI
-    needs: [linux, windows, macos, sdist]
+    needs: [ linux, windows, macos, sdist ]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && !inputs.publish
     environment:
