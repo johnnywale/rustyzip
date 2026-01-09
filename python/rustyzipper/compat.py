@@ -9,7 +9,7 @@ Usage:
     # import pyminizip
 
     # To this:
-    from rustyzip.compat import pyminizip
+    from rustyzipper.compat import pyminizip
 
     # Rest of your code works as-is!
     pyminizip.compress("file.txt", None, "output.zip", "password", 5)
@@ -23,7 +23,7 @@ Note:
 
 from typing import List, Optional, Union
 
-from rustyzip import rustyzip as _rust
+from rustyzipper import rustyzip as _rust
 
 
 class _PyminizipCompat:

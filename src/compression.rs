@@ -71,7 +71,14 @@ pub fn compress_file(
         .and_then(|n| n.to_str())
         .ok_or_else(|| RustyZipError::InvalidPath(input_path.display().to_string()))?;
 
-    add_file_to_zip(&mut zip, input_path, file_name, password, encryption, compression_level)?;
+    add_file_to_zip(
+        &mut zip,
+        input_path,
+        file_name,
+        password,
+        encryption,
+        compression_level,
+    )?;
 
     zip.finish()?;
     Ok(())
@@ -107,7 +114,14 @@ pub fn compress_files(
             _ => file_name.to_string(),
         };
 
-        add_file_to_zip(&mut zip, input_path, &archive_name, password, encryption, compression_level)?;
+        add_file_to_zip(
+            &mut zip,
+            input_path,
+            &archive_name,
+            password,
+            encryption,
+            compression_level,
+        )?;
     }
 
     zip.finish()?;
@@ -125,9 +139,7 @@ pub fn compress_directory(
     exclude_patterns: Option<&[String]>,
 ) -> Result<()> {
     if !input_dir.exists() {
-        return Err(RustyZipError::FileNotFound(
-            input_dir.display().to_string(),
-        ));
+        return Err(RustyZipError::FileNotFound(input_dir.display().to_string()));
     }
 
     if !input_dir.is_dir() {
@@ -155,7 +167,9 @@ pub fn compress_directory(
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
 
-    let base_path = input_dir.canonicalize()?;
+    // Use the original input_dir for prefix stripping to avoid Windows canonicalize issues
+    // (canonicalize on Windows adds \\?\ prefix which breaks strip_prefix)
+    let base_path = input_dir;
 
     for entry in WalkDir::new(input_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -166,7 +180,7 @@ pub fn compress_directory(
 
         // Get relative path for archive
         let relative_path = path
-            .strip_prefix(&base_path)
+            .strip_prefix(base_path)
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/");
@@ -205,7 +219,14 @@ pub fn compress_directory(
             }
         }
 
-        add_file_to_zip(&mut zip, path, &relative_path, password, encryption, compression_level)?;
+        add_file_to_zip(
+            &mut zip,
+            path,
+            &relative_path,
+            password,
+            encryption,
+            compression_level,
+        )?;
     }
 
     zip.finish()?;
@@ -221,15 +242,18 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
     encryption: EncryptionMethod,
     compression_level: CompressionLevel,
 ) -> Result<()> {
-    let compression_method = if compression_level.0 == 0 {
-        CompressionMethod::Stored
+    let (compression_method, level_option) = if compression_level.0 == 0 {
+        (CompressionMethod::Stored, None)
     } else {
-        CompressionMethod::Deflated
+        (
+            CompressionMethod::Deflated,
+            Some(compression_level.0 as i64),
+        )
     };
 
     let base_options = SimpleFileOptions::default()
         .compression_method(compression_method)
-        .compression_level(Some(compression_level.0 as i64));
+        .compression_level(level_option);
 
     match (password, encryption) {
         (Some(pwd), EncryptionMethod::Aes256) => {
@@ -275,15 +299,13 @@ pub fn decompress_file(
 
     for i in 0..archive.len() {
         let mut file = match password {
-            Some(pwd) => {
-                match archive.by_index_decrypt(i, pwd.as_bytes()) {
-                    Ok(f) => f,
-                    Err(zip::result::ZipError::InvalidPassword) => {
-                        return Err(RustyZipError::InvalidPassword);
-                    }
-                    Err(e) => return Err(e.into()),
+            Some(pwd) => match archive.by_index_decrypt(i, pwd.as_bytes()) {
+                Ok(f) => f,
+                Err(zip::result::ZipError::InvalidPassword) => {
+                    return Err(RustyZipError::InvalidPassword);
                 }
-            }
+                Err(e) => return Err(e.into()),
+            },
             None => archive.by_index(i)?,
         };
 

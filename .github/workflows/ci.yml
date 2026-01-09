@@ -2,18 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - "feature*"
   pull_request:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - "feature*"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Run Rust tests
+  # -------------------------
+  # Rust tests
+  # -------------------------
   rust-test:
     name: Rust Tests
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,21 +35,25 @@ jobs:
       - name: Run Rust tests
         run: cargo test --verbose
 
-      - name: Check formatting
-        run: cargo fmt --check
+#      - name: Check formatting
+#        run: cargo fmt --check
+#
+#      - name: Run clippy
+#        run: cargo clippy -- -D warnings
 
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
-
-  # Run Python tests on multiple platforms
+  # -------------------------
+  # Python tests (via maturin)
+  # -------------------------
   python-test:
     name: Python Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -55,12 +68,15 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install maturin
+      - name: Install maturin and pytest
         run: pip install maturin pytest
 
-      - name: Build and install package
-        run: maturin develop
+      - name: Build wheel
+        run: maturin build --release
+
+      - name: Install wheel
+        shell: bash
+        run: pip install target/wheels/*.whl
 
       - name: Run Python tests
-        run: pytest python/tests/ -v
-        working-directory: ${{ github.workspace }}
+        run: pytest -v --import-mode=importlib

@@ -1,11 +1,11 @@
 """
-RustyZip - A high-performance, secure file compression library.
+RustyZipper - A high-performance, secure file compression library.
 
-RustyZip provides fast ZIP compression with multiple encryption methods,
+RustyZipper provides fast ZIP compression with multiple encryption methods,
 serving as a modern, maintained replacement for pyminizip.
 
 Example usage:
-    >>> from rustyzip import compress_file, decompress_file, EncryptionMethod
+    >>> from rustyzipper import compress_file, decompress_file, EncryptionMethod
     >>>
     >>> # Secure compression with AES-256 (recommended)
     >>> compress_file("document.pdf", "secure.zip", password="MyP@ssw0rd")
@@ -27,7 +27,8 @@ from enum import Enum
 from typing import List, Optional
 
 # Import the Rust extension module
-from rustyzip import rustyzip as _rust
+from . import rustyzip as _rust
+
 
 __version__ = _rust.__version__
 __all__ = [
