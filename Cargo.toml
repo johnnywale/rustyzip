@@ -14,20 +14,20 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Python bindings
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.27", features = ["extension-module"] }
 
 # Compression
-zip = { version = "2.0", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
-flate2 = "1.0"
+zip = { version = "7.0", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
+flate2 = "1"
 
 # Cryptography (for additional crypto operations if needed)
 rand = "0.8"
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2"
 
 # Directory traversal
-walkdir = "2.4"
+walkdir = "2"
 
 # Glob pattern matching
 glob = "0.3"
