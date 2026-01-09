@@ -43,6 +43,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set Release Version
+        run: |
+          CLEAN_VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version = \".*\"/version = \"$CLEAN_VERSION\"/" pyproject.toml
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -73,6 +78,12 @@ jobs:
         with:
           python-version: "3.12"
           architecture: x64  # Ensure 64-bit Python
+
+      - name: Set Release Version
+        shell: bash
+        run: |
+          CLEAN_VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version = \".*\"/version = \"$CLEAN_VERSION\"/" pyproject.toml
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -105,10 +116,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set Release Version
+        shell: bash
+        run: |
+          CLEAN_VERSION=${GITHUB_REF_NAME#v}
+          # Add '' after -i for macOS compatibility
+          sed -i '' "s/^version = \".*\"/version = \"$CLEAN_VERSION\"/" pyproject.toml
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
+#          maturin-version: ${{ github.ref_name }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
 

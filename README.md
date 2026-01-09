@@ -13,17 +13,15 @@ A high-performance, secure file compression library with password protection, wr
 
 ### Problems with pyminizip:
 - Abandoned (last update years ago)
-- Security vulnerabilities (CVE-2018-25032, CVE-2022-37434)
+- Security vulnerabilities (CVE-2022-37434)
 - Outdated zlib version
 - No AES-256 support
-- Slower performance
 
 ### rustyzipper advantages:
 - **Actively maintained** with regular updates
 - **No known security vulnerabilities**
 - **Modern zlib** (latest version)
 - **AES-256 encryption** for sensitive data
-- **2-5x faster** (Rust performance)
 - **Drop-in pyminizip replacement**
 - **Windows Explorer compatible** (ZipCrypto option)
 - **Zero Python dependencies** (fully self-contained)
@@ -276,18 +274,6 @@ maturin develop
 cargo test                    # Rust tests
 pytest python/tests/ -v       # Python tests
 ```
-
-### Release Process
-
-Releases are automated via GitHub Actions:
-
-1. Update version in `Cargo.toml` and `pyproject.toml`
-2. Commit and push to main
-3. Create a new GitHub Release with a tag (e.g., `v1.0.0`)
-4. GitHub Actions will automatically:
-   - Build wheels for all platforms (Linux, Windows, macOS)
-   - Build for multiple architectures (x86_64, aarch64, i686, armv7)
-   - Publish to PyPI
 
 ### Supported Platforms
 
