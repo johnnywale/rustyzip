@@ -3,7 +3,7 @@ requires = ["maturin>=1.4,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rustyzip"
+name = "rustyzipper"
 version = "1.0.0"
 description = "A high-performance, secure file compression library with password protection"
 readme = "README.md"
@@ -50,7 +50,7 @@ dev = [
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
-module-name = "rustyzip.rustyzip"
+module-name = "rustyzipper.rustyzip"
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]

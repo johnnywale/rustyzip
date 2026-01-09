@@ -6,7 +6,7 @@ import shutil
 
 import pytest
 
-from rustyzip.compat import pyminizip
+from rustyzipper.compat import pyminizip
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ class TestMigrationScenarios:
     def test_basic_migration_pattern(self, temp_dir, sample_file):
         """Test the basic migration pattern described in docs."""
         # This is exactly how existing pyminizip code would work
-        # after changing: import pyminizip -> from rustyzip.compat import pyminizip
+        # after changing: import pyminizip -> from rustyzipper.compat import pyminizip
 
         output = os.path.join(temp_dir, "migrated.zip")
         extract_dir = os.path.join(temp_dir, "extracted")

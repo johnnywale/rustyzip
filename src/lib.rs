@@ -184,26 +184,27 @@ fn compress(
     let _py = src.py();
 
     // Handle both single file and list of files
-    let (paths, prefixes): (Vec<String>, Vec<Option<String>>) = if src.is_instance_of::<pyo3::types::PyList>() {
-        let paths: Vec<String> = src.extract()?;
-        let prefixes: Vec<Option<String>> = if src_prefix.is_none() {
-            vec![None; paths.len()]
-        } else if src_prefix.is_instance_of::<pyo3::types::PyList>() {
-            src_prefix.extract()?
+    let (paths, prefixes): (Vec<String>, Vec<Option<String>>) =
+        if src.is_instance_of::<pyo3::types::PyList>() {
+            let paths: Vec<String> = src.extract()?;
+            let prefixes: Vec<Option<String>> = if src_prefix.is_none() {
+                vec![None; paths.len()]
+            } else if src_prefix.is_instance_of::<pyo3::types::PyList>() {
+                src_prefix.extract()?
+            } else {
+                let prefix: Option<String> = src_prefix.extract()?;
+                vec![prefix; paths.len()]
+            };
+            (paths, prefixes)
         } else {
-            let prefix: Option<String> = src_prefix.extract()?;
-            vec![prefix; paths.len()]
+            let path: String = src.extract()?;
+            let prefix: Option<String> = if src_prefix.is_none() {
+                None
+            } else {
+                src_prefix.extract()?
+            };
+            (vec![path], vec![prefix])
         };
-        (paths, prefixes)
-    } else {
-        let path: String = src.extract()?;
-        let prefix: Option<String> = if src_prefix.is_none() {
-            None
-        } else {
-            src_prefix.extract()?
-        };
-        (vec![path], vec![prefix])
-    };
 
     // Use ZipCrypto for pyminizip compatibility
     let encryption = if password.is_some() {

@@ -1,15 +1,15 @@
-# RustyZip
+# rustyzipper
 
-[![CI](https://github.com/johnnywalee/rustyzip/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywalee/rustyzip/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/rustyzip.svg)](https://pypi.org/project/rustyzip/)
-[![Python](https://img.shields.io/pypi/pyversions/rustyzip.svg)](https://pypi.org/project/rustyzip/)
+[![CI](https://github.com/johnnywalee/rustyzipper/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywalee/rustyzipper/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
+[![Python](https://img.shields.io/pypi/pyversions/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A high-performance, secure file compression library with password protection, written in Rust with Python bindings.
 
-**RustyZip** is a modern, actively maintained replacement for [pyminizip](https://github.com/smihica/pyminizip), addressing critical security vulnerabilities while providing better performance and more encryption options.
+**rustyzipper** is a modern, actively maintained replacement for [pyminizip](https://github.com/smihica/pyminizip), addressing critical security vulnerabilities while providing better performance and more encryption options.
 
-## Why RustyZip?
+## Why rustyzipper?
 
 ### Problems with pyminizip:
 - Abandoned (last update years ago)
@@ -18,7 +18,7 @@ A high-performance, secure file compression library with password protection, wr
 - No AES-256 support
 - Slower performance
 
-### RustyZip advantages:
+### rustyzipper advantages:
 - **Actively maintained** with regular updates
 - **No known security vulnerabilities**
 - **Modern zlib** (latest version)
@@ -31,14 +31,13 @@ A high-performance, secure file compression library with password protection, wr
 ## Installation
 
 ```bash
-pip install rustyzip
+pip install rustyzipper
 ```
 
 ### Upgrading from pyminizip
 
 ```bash
-pip uninstall pyminizip
-pip install rustyzip
+pip install rustyzipper
 ```
 
 ## Quick Start
@@ -46,7 +45,7 @@ pip install rustyzip
 ### Modern API (Recommended)
 
 ```python
-from rustyzip import compress_file, decompress_file, EncryptionMethod
+from rustyzipper import compress_file, decompress_file, EncryptionMethod
 
 # Secure compression with AES-256 (recommended for sensitive data)
 compress_file("document.pdf", "secure.zip", password="MySecureP@ssw0rd")
@@ -71,7 +70,7 @@ decompress_file("secure.zip", "extracted/", password="MySecureP@ssw0rd")
 # import pyminizip
 
 # To this:
-from rustyzip.compat import pyminizip
+from rustyzipper.compat import pyminizip
 
 # Rest of your code works as-is!
 pyminizip.compress("file.txt", None, "output.zip", "password", 5)
@@ -91,7 +90,7 @@ pyminizip.uncompress("output.zip", "password", "extracted/", False)
 ### Compression Levels
 
 ```python
-from rustyzip import CompressionLevel
+from rustyzipper import CompressionLevel
 
 CompressionLevel.STORE    # No compression (fastest)
 CompressionLevel.FAST     # Fast compression
@@ -156,7 +155,7 @@ decompress_file(
 ### Compress a Directory with Filters
 
 ```python
-from rustyzip import compress_directory, EncryptionMethod
+from rustyzipper import compress_directory, EncryptionMethod
 
 compress_directory(
     "my_project/",
@@ -171,7 +170,7 @@ compress_directory(
 ### Compress Multiple Files
 
 ```python
-from rustyzip import compress_files
+from rustyzipper import compress_files
 
 compress_files(
     ["report.pdf", "data.csv", "summary.txt"],
@@ -216,8 +215,8 @@ compress_files(
 ### Build
 
 ```bash
-git clone https://github.com/johnnywalee/rustyzip.git
-cd rustyzip
+git clone https://github.com/johnnywalee/rustyzipper.git
+cd rustyzipper
 
 # Development build
 maturin develop
@@ -239,7 +238,7 @@ pytest python/tests/
 
 ## Comparison with pyminizip
 
-| Feature | pyminizip | RustyZip |
+| Feature | pyminizip | rustyzipper |
 |---------|-----------|----------|
 | Maintenance Status | Abandoned | Active |
 | Security Vulnerabilities | Multiple CVEs | None known |
@@ -264,8 +263,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ```bash
 # Clone the repository
-git clone https://github.com/johnnywalee/rustyzip.git
-cd rustyzip
+git clone https://github.com/johnnywalee/rustyzipper.git
+cd rustyzipper
 
 # Install development dependencies
 pip install maturin pytest
@@ -300,7 +299,6 @@ Releases are automated via GitHub Actions:
 
 ## Links
 
-- [Documentation](https://rustyzip.readthedocs.io)
-- [PyPI Package](https://pypi.org/project/rustyzip/)
+- [PyPI Package](https://pypi.org/project/rustyzipper/)
 - [GitHub Repository](https://github.com/johnnywalee/rustyzip)
 - [Issue Tracker](https://github.com/johnnywalee/rustyzip/issues)

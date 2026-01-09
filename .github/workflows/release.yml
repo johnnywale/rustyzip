@@ -15,13 +15,14 @@ permissions:
   contents: read
 
 env:
-  PACKAGE_NAME: rustyzip
+  PACKAGE_NAME: rustyzipper
 
 jobs:
   # Build wheels for Linux
   linux:
     name: Build Linux (${{ matrix.target }})
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -43,7 +47,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
           sccache: 'true'
           manylinux: auto
 
@@ -76,7 +80,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
           sccache: 'true'
 
       - name: Upload wheels
@@ -93,8 +97,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+          - universal2-apple-darwin
     steps:
       - uses: actions/checkout@v4
 
@@ -107,7 +110,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
           sccache: 'true'
 
       - name: Upload wheels

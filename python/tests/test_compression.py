@@ -1,4 +1,4 @@
-"""Tests for rustyzip compression and decompression functionality."""
+"""Tests for rustyzipper compression and decompression functionality."""
 
 import os
 import tempfile
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from rustyzip import (
+from rustyzipper import (
     compress_file,
     compress_files,
     compress_directory,
@@ -30,7 +30,7 @@ def sample_file(temp_dir):
     """Create a sample file for testing."""
     path = os.path.join(temp_dir, "sample.txt")
     with open(path, "w") as f:
-        f.write("Hello, World! This is a test file for RustyZip.")
+        f.write("Hello, World! This is a test file for rustyzipper.")
     return path
 
 
