@@ -47,7 +47,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
+          args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
 
@@ -80,7 +80,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
+          args: --release --out dist --find-interpreter
           sccache: 'true'
 
       - name: Upload wheels
@@ -110,7 +110,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter --python 3.9 3.10 3.11 3.12 3.13
+          args: --release --out dist --find-interpreter
           sccache: 'true'
 
       - name: Upload wheels
@@ -146,7 +146,7 @@ jobs:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     environment:
       name: pypi
-      url: https://pypi.org/project/rustyzip/
+      url: https://pypi.org/project/rustyzipper/
     permissions:
       id-token: write  # For trusted publishing
     steps:
