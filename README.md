@@ -172,6 +172,204 @@ compress_files(
 )
 ```
 
+## In-Memory and Streaming Compression
+
+rustyzipper provides multiple APIs for different use cases, from simple in-memory operations to memory-efficient streaming for large files.
+
+### In-Memory Compression (`compress_bytes` / `decompress_bytes`)
+
+Compress and decompress data directly in memory without filesystem I/O. Ideal for web applications, APIs, and processing data in memory.
+
+```python
+from rustyzipper import compress_bytes, decompress_bytes, EncryptionMethod
+
+# Compress multiple files to bytes
+files = [
+    ("hello.txt", b"Hello, World!"),
+    ("data/config.json", b'{"key": "value"}'),
+    ("binary.bin", bytes(range(256))),
+]
+zip_data = compress_bytes(files, password="secret")
+
+# Send over network, store in database, etc.
+# ...
+
+# Decompress back to list of (filename, content) tuples
+extracted = decompress_bytes(zip_data, password="secret")
+for filename, content in extracted:
+    print(f"{filename}: {len(content)} bytes")
+```
+
+**Note:** These functions load all data into memory. For large files, use streaming APIs below.
+
+### Streaming Compression (`compress_stream` / `decompress_stream`)
+
+Stream data through file-like objects. Compresses in 64KB chunks to reduce memory usage.
+
+```python
+import io
+from rustyzipper import compress_stream, decompress_stream, EncryptionMethod
+
+# Compress from file handles to BytesIO
+output = io.BytesIO()
+with open("large_file.bin", "rb") as f1, open("another.txt", "rb") as f2:
+    compress_stream(
+        [("large_file.bin", f1), ("another.txt", f2)],
+        output,
+        password="secret"
+    )
+
+zip_data = output.getvalue()
+
+# Decompress from BytesIO
+output.seek(0)
+files = decompress_stream(output, password="secret")
+
+# Or stream directly to/from files
+with open("output.zip", "wb") as out:
+    with open("input.txt", "rb") as inp:
+        compress_stream([("input.txt", inp)], out, encryption=EncryptionMethod.NONE)
+```
+
+### Per-File Streaming Iterator (`open_zip_stream`)
+
+For processing large ZIP archives with many files, use the streaming iterator to decompress one file at a time. This keeps only one decompressed file in memory at any moment.
+
+```python
+from rustyzipper import open_zip_stream, open_zip_stream_from_file
+
+# From bytes
+zip_data = open("archive.zip", "rb").read()
+for filename, content in open_zip_stream(zip_data, password="secret"):
+    print(f"Processing {filename}: {len(content)} bytes")
+    process_file(content)
+    # Previous file's content is garbage collected
+
+# From file handle
+with open("archive.zip", "rb") as f:
+    for filename, content in open_zip_stream_from_file(f):
+        process_file(content)
+
+# Random access and inspection
+reader = open_zip_stream(zip_data)
+print(f"Files: {reader.namelist()}")        # List all files
+print(f"Count: {len(reader)}")              # Number of files
+content = reader.read("specific_file.txt")  # Extract by name
+```
+
+### Memory Comparison
+
+| Function | ZIP Data | Decompressed Files | Best For |
+|----------|----------|-------------------|----------|
+| `decompress_bytes()` | All in memory | All at once | Small archives |
+| `decompress_stream()` | Streamed | All at once | Large ZIP, small files |
+| `open_zip_stream()` | All in memory | One at a time | Many files, ZIP fits in RAM |
+| `open_zip_stream_from_file()` | **Streamed** | One at a time | Huge ZIP files |
+
+### Choosing the Right Function
+
+```
+Is your ZIP file small (< 100MB)?
+├── Yes → Use decompress_bytes() or open_zip_stream()
+└── No → Is the ZIP itself too large for memory?
+    ├── Yes → Use open_zip_stream_from_file() (true streaming)
+    └── No → Use open_zip_stream() (ZIP in memory, files streamed)
+```
+
+**Example: 10GB ZIP with 100 files (100MB each when decompressed)**
+
+| Function | Peak Memory |
+|----------|-------------|
+| `decompress_bytes()` | ~10GB (all decompressed at once) |
+| `open_zip_stream()` | ~compressed size + 100MB (one file at a time) |
+| `open_zip_stream_from_file()` | ~100MB only (true streaming) |
+
+### API Reference
+
+#### compress_bytes
+
+```python
+compress_bytes(
+    files: list[tuple[str, bytes]],
+    password: str | None = None,
+    encryption: EncryptionMethod = EncryptionMethod.AES256,
+    compression_level: CompressionLevel = CompressionLevel.DEFAULT,
+    suppress_warning: bool = False
+) -> bytes
+```
+
+#### decompress_bytes
+
+```python
+decompress_bytes(
+    data: bytes,
+    password: str | None = None
+) -> list[tuple[str, bytes]]
+```
+
+#### compress_stream
+
+```python
+compress_stream(
+    files: list[tuple[str, BinaryIO]],
+    output: BinaryIO,
+    password: str | None = None,
+    encryption: EncryptionMethod = EncryptionMethod.AES256,
+    compression_level: CompressionLevel = CompressionLevel.DEFAULT,
+    suppress_warning: bool = False
+) -> None
+```
+
+#### decompress_stream
+
+```python
+decompress_stream(
+    input: BinaryIO,
+    password: str | None = None
+) -> list[tuple[str, bytes]]
+```
+
+#### open_zip_stream
+
+```python
+open_zip_stream(
+    data: bytes,
+    password: str | None = None
+) -> ZipStreamReader
+
+# ZipStreamReader supports:
+# - Iteration: for filename, content in reader
+# - len(reader): Number of files
+# - reader.namelist(): List of filenames
+# - reader.read(name): Extract specific file
+# - reader.file_count: Number of files (property)
+# - reader.total_entries: Total entries including directories (property)
+```
+
+#### open_zip_stream_from_file
+
+```python
+open_zip_stream_from_file(
+    input: BinaryIO,
+    password: str | None = None
+) -> ZipFileStreamReader
+
+# ZipFileStreamReader supports the same interface as ZipStreamReader
+# but reads directly from the file handle (true streaming).
+# NOTE: File handle must remain open during iteration!
+```
+
+**Usage example:**
+
+```python
+from rustyzipper import open_zip_stream_from_file
+
+# True streaming - even 100GB ZIP files work with minimal memory
+with open("huge_archive.zip", "rb") as f:
+    for filename, content in open_zip_stream_from_file(f):
+        process_file(content)  # Only one file in memory at a time
+```
+
 ## Security Guidelines
 
 ### DO:
@@ -236,7 +434,6 @@ pytest python/tests/
 | Security Vulnerabilities | Multiple CVEs | None known |
 | zlib Version | Outdated | Latest |
 | AES-256 Support | No | Yes |
-| Performance | Baseline | 2-5x faster |
 | Memory Safety | C/C++ risks | Rust guarantees |
 | Windows Explorer Support | Yes (ZipCrypto) | Yes (ZipCrypto) |
 | API Compatibility | N/A | Drop-in replacement |

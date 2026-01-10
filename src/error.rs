@@ -23,12 +23,6 @@ pub enum RustyZipError {
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
-    #[error("Compression failed: {0}")]
-    CompressionFailed(String),
-
-    #[error("Decompression failed: {0}")]
-    DecompressionFailed(String),
-
     #[error("Pattern error: {0}")]
     PatternError(String),
 
@@ -45,8 +39,6 @@ impl From<RustyZipError> for PyErr {
             RustyZipError::InvalidPassword => PyValueError::new_err(err.to_string()),
             RustyZipError::UnsupportedEncryption(_) => PyValueError::new_err(err.to_string()),
             RustyZipError::InvalidPath(_) => PyValueError::new_err(err.to_string()),
-            RustyZipError::CompressionFailed(_) => PyIOError::new_err(err.to_string()),
-            RustyZipError::DecompressionFailed(_) => PyIOError::new_err(err.to_string()),
             RustyZipError::PatternError(_) => PyValueError::new_err(err.to_string()),
             RustyZipError::WalkDirError(_) => PyIOError::new_err(err.to_string()),
         }
