@@ -93,7 +93,7 @@ class TestPyminizipCompat:
         extract_dir = os.path.join(temp_dir, "extracted")
 
         pyminizip.compress(sample_file, None, zip_file, None, 5)
-        pyminizip.uncompress(zip_file, None, extract_dir, False)
+        pyminizip.uncompress(zip_file, None, extract_dir, 0)
 
         extracted = os.path.join(extract_dir, "sample.txt")
         assert os.path.exists(extracted)
@@ -105,23 +105,71 @@ class TestPyminizipCompat:
         password = "secret"
 
         pyminizip.compress(sample_file, None, zip_file, password, 5)
-        pyminizip.uncompress(zip_file, password, extract_dir, False)
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
 
         extracted = os.path.join(extract_dir, "sample.txt")
         assert os.path.exists(extracted)
 
-    def test_uncompress_delete_zip(self, temp_dir, sample_file):
-        """Test extracting with delete_zip=True."""
+    def test_uncompress_to_cwd(self, temp_dir, sample_file):
+        """Test extracting with dst=None (extract to current working directory)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        os.makedirs(extract_dir, exist_ok=True)
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Save current directory and change to extract_dir
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(extract_dir)
+            pyminizip.uncompress(zip_file, None, None, 0)
+            assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_uncompress_withoutpath_preserves_paths(self, temp_dir):
+        """Test that withoutpath=0 preserves directory structure."""
+        # Create a file in a subdirectory
+        subdir = os.path.join(temp_dir, "subdir")
+        os.makedirs(subdir)
+        nested_file = os.path.join(subdir, "nested.txt")
+        with open(nested_file, "w") as f:
+            f.write("Nested content")
+
         zip_file = os.path.join(temp_dir, "test.zip")
         extract_dir = os.path.join(temp_dir, "extracted")
 
-        pyminizip.compress(sample_file, None, zip_file, None, 5)
-        assert os.path.exists(zip_file)
+        # Compress with a prefix to create nested structure in zip
+        pyminizip.compress(nested_file, "deep/path", zip_file, None, 5)
 
-        pyminizip.uncompress(zip_file, None, extract_dir, True)
+        # Extract with withoutpath=0 (preserve paths)
+        pyminizip.uncompress(zip_file, None, extract_dir, 0)
 
-        assert not os.path.exists(zip_file)
-        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+        # File should be at the nested path
+        assert os.path.exists(os.path.join(extract_dir, "deep", "path", "nested.txt"))
+
+    def test_uncompress_withoutpath_flattens(self, temp_dir):
+        """Test that withoutpath=1 extracts files without directory structure."""
+        # Create a file in a subdirectory
+        subdir = os.path.join(temp_dir, "subdir")
+        os.makedirs(subdir)
+        nested_file = os.path.join(subdir, "nested.txt")
+        with open(nested_file, "w") as f:
+            f.write("Nested content")
+
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        # Compress with a prefix to create nested structure in zip
+        pyminizip.compress(nested_file, "deep/path", zip_file, None, 5)
+
+        # Extract with withoutpath=1 (flatten)
+        pyminizip.uncompress(zip_file, None, extract_dir, 1)
+
+        # File should be directly in extract_dir, not in nested path
+        assert os.path.exists(os.path.join(extract_dir, "nested.txt"))
+        # The nested path should NOT exist
+        assert not os.path.exists(os.path.join(extract_dir, "deep"))
 
     def test_uncompress_wrong_password(self, temp_dir, sample_file):
         """Test extracting with wrong password fails."""
@@ -131,7 +179,7 @@ class TestPyminizipCompat:
         pyminizip.compress(sample_file, None, zip_file, "correct", 5)
 
         with pytest.raises((ValueError, IOError)):
-            pyminizip.uncompress(zip_file, "wrong", extract_dir, False)
+            pyminizip.uncompress(zip_file, "wrong", extract_dir, 0)
 
     def test_compress_different_levels(self, temp_dir, sample_file):
         """Test compression with different levels."""
@@ -156,7 +204,7 @@ class TestMigrationScenarios:
         pyminizip.compress(sample_file, None, output, "password", 5)
 
         # Uncompress
-        pyminizip.uncompress(output, "password", extract_dir, False)
+        pyminizip.uncompress(output, "password", extract_dir, 0)
 
         # Verify
         assert os.path.exists(os.path.join(extract_dir, "sample.txt"))

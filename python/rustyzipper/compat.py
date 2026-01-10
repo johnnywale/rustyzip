@@ -14,7 +14,7 @@ Usage:
     # Rest of your code works as-is!
     pyminizip.compress("file.txt", None, "output.zip", "password", 5)
     pyminizip.compress_multiple(["file1.txt", "file2.txt"], [], "output.zip", "password", 5, progress_callback)
-    pyminizip.uncompress("output.zip", "password", "extracted/", False)
+    pyminizip.uncompress("output.zip", "password", "extracted/", 0)
 
 Note:
     For pyminizip compatibility, this module uses ZipCrypto encryption by default
@@ -122,8 +122,8 @@ class _PyminizipCompat:
     def uncompress(
         src: str,
         password: Optional[str],
-        dst: str,
-        delete_zip: bool,
+        dst: Optional[str],
+        withoutpath: int,
     ) -> None:
         """Extract a ZIP archive.
 
@@ -132,17 +132,24 @@ class _PyminizipCompat:
         Args:
             src: Source ZIP file path.
             password: Password for encrypted archives. Use None if not encrypted.
-            dst: Destination directory path.
-            delete_zip: Whether to delete the ZIP file after extraction.
+            dst: Destination directory path, or None to extract to current working directory.
+            withoutpath: If non-zero, extract files without their directory paths
+                        (flatten all files into the destination directory).
+
+        Returns:
+            Always returns None.
 
         Raises:
             IOError: If file operations fail.
             ValueError: If password is incorrect.
 
         Example:
-            >>> pyminizip.uncompress("archive.zip", "password", "extracted/", False)
+            >>> pyminizip.uncompress("archive.zip", "password", "extracted/", 0)
         """
-        _rust.uncompress(src, password, dst, delete_zip)
+        import os
+        # Use current working directory if dst is None
+        extract_dir = dst if dst is not None else os.getcwd()
+        _rust.uncompress(src, password, extract_dir, withoutpath)
 
 
 # Create a module-like object for compatibility
