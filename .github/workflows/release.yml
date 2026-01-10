@@ -201,7 +201,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && !inputs.publish
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/rustyzip/
+      url: https://test.pypi.org/project/rustyzipper/
     permissions:
       id-token: write
     steps:

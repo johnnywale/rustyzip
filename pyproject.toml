@@ -25,6 +25,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
     "Topic :: System :: Archiving :: Compression",
     "Topic :: Security :: Cryptography",
@@ -33,10 +34,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/johnnywalee/rustyzip"
+Homepage = "https://github.com/johnnywale/rustyzip"
 Documentation = "https://rustyzip.readthedocs.io"
-Repository = "https://github.com/johnnywalee/rustyzip"
-Issues = "https://github.com/johnnywalee/rustyzip/issues"
+Repository = "https://github.com/johnnywale/rustyzip"
+Issues = "https://github.com/johnnywale/rustyzip/issues"
 
 [project.optional-dependencies]
 dev = [

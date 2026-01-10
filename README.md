@@ -1,13 +1,13 @@
 # rustyzipper
 
-[![CI](https://github.com/johnnywalee/rustyzipper/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywalee/rustyzipper/actions/workflows/ci.yml)
+[![CI](https://github.com/johnnywale/rustyzipper/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywale/rustyzipper/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
 [![Python](https://img.shields.io/pypi/pyversions/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A high-performance, secure file compression library with password protection, written in Rust with Python bindings.
 
-**rustyzipper** is a modern, actively maintained replacement for [pyminizip](https://github.com/smihica/pyminizip), addressing critical security vulnerabilities while providing better performance and more encryption options.
+**rustyzipper** is a modern, actively maintained replacement for [pyminizip](https://github.com/smihica/pyminizip), addressing critical security vulnerabilities while more encryption options.
 
 ## Why rustyzipper?
 
@@ -27,12 +27,6 @@ A high-performance, secure file compression library with password protection, wr
 - **Zero Python dependencies** (fully self-contained)
 
 ## Installation
-
-```bash
-pip install rustyzipper
-```
-
-### Upgrading from pyminizip
 
 ```bash
 pip install rustyzipper
@@ -213,7 +207,7 @@ compress_files(
 ### Build
 
 ```bash
-git clone https://github.com/johnnywalee/rustyzipper.git
+git clone https://github.com/johnnywale/rustyzipper.git
 cd rustyzipper
 
 # Development build
@@ -246,7 +240,7 @@ pytest python/tests/
 | Memory Safety | C/C++ risks | Rust guarantees |
 | Windows Explorer Support | Yes (ZipCrypto) | Yes (ZipCrypto) |
 | API Compatibility | N/A | Drop-in replacement |
-| Python 3.12 Support | Limited | Full |
+| Installation | Requires compiler | Prebuilt wheels |
 | Type Hints | No | Yes |
 
 ## License
@@ -261,7 +255,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ```bash
 # Clone the repository
-git clone https://github.com/johnnywalee/rustyzipper.git
+git clone https://github.com/johnnywale/rustyzipper.git
 cd rustyzipper
 
 # Install development dependencies
@@ -286,5 +280,5 @@ pytest python/tests/ -v       # Python tests
 ## Links
 
 - [PyPI Package](https://pypi.org/project/rustyzipper/)
-- [GitHub Repository](https://github.com/johnnywalee/rustyzip)
-- [Issue Tracker](https://github.com/johnnywalee/rustyzip/issues)
+- [GitHub Repository](https://github.com/johnnywale/rustyzip)
+- [Issue Tracker](https://github.com/johnnywale/rustyzip/issues)
