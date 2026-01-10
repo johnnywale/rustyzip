@@ -66,8 +66,9 @@ fn compress_file(
 /// * `password` - Optional password for encryption
 /// * `encryption` - Encryption method: "aes256", "zipcrypto", or "none"
 /// * `compression_level` - Compression level (0-9, default 6)
+/// * `suppress_warning` - Suppress security warnings for weak encryption
 #[pyfunction]
-#[pyo3(signature = (input_paths, prefixes, output_path, password=None, encryption="aes256", compression_level=6))]
+#[pyo3(signature = (input_paths, prefixes, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
 fn compress_files(
     input_paths: Vec<String>,
     prefixes: Vec<Option<String>>,
@@ -75,8 +76,17 @@ fn compress_files(
     password: Option<&str>,
     encryption: &str,
     compression_level: u32,
+    suppress_warning: bool,
 ) -> PyResult<()> {
     let enc_method = EncryptionMethod::from_str(encryption)?;
+
+    // Warn about weak encryption
+    if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
+        eprintln!(
+            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+            Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
+        );
+    }
 
     let paths: Vec<&Path> = input_paths.iter().map(|p| Path::new(p.as_str())).collect();
     let prefix_refs: Vec<Option<&str>> = prefixes
@@ -106,8 +116,9 @@ fn compress_files(
 /// * `compression_level` - Compression level (0-9, default 6)
 /// * `include_patterns` - Optional list of glob patterns to include
 /// * `exclude_patterns` - Optional list of glob patterns to exclude
+/// * `suppress_warning` - Suppress security warnings for weak encryption
 #[pyfunction]
-#[pyo3(signature = (input_dir, output_path, password=None, encryption="aes256", compression_level=6, include_patterns=None, exclude_patterns=None))]
+#[pyo3(signature = (input_dir, output_path, password=None, encryption="aes256", compression_level=6, include_patterns=None, exclude_patterns=None, suppress_warning=false))]
 fn compress_directory(
     input_dir: &str,
     output_path: &str,
@@ -116,8 +127,17 @@ fn compress_directory(
     compression_level: u32,
     include_patterns: Option<Vec<String>>,
     exclude_patterns: Option<Vec<String>>,
+    suppress_warning: bool,
 ) -> PyResult<()> {
     let enc_method = EncryptionMethod::from_str(encryption)?;
+
+    // Warn about weak encryption
+    if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
+        eprintln!(
+            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+            Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
+        );
+    }
 
     compression::compress_directory(
         Path::new(input_dir),
@@ -154,6 +174,97 @@ fn decompress_file(input_path: &str, output_path: &str, password: Option<&str>) 
 }
 
 // ============================================================================
+// In-Memory Compression Functions
+// ============================================================================
+
+/// Compress bytes directly to a ZIP archive in memory.
+///
+/// # Arguments
+/// * `files` - List of (archive_name, data) tuples to compress
+/// * `password` - Optional password for encryption
+/// * `encryption` - Encryption method: "aes256", "zipcrypto", or "none"
+/// * `compression_level` - Compression level (0-9, default 6)
+/// * `suppress_warning` - Suppress security warnings for weak encryption
+///
+/// # Returns
+/// * `bytes` - The compressed ZIP archive
+///
+/// # Raises
+/// * `IOError` - If compression fails
+/// * `ValueError` - If parameters are invalid
+///
+/// # Example
+/// ```python
+/// import rustyzipper
+/// files = [("hello.txt", b"Hello World"), ("subdir/data.bin", b"\x00\x01\x02")]
+/// zip_data = rustyzipper.compress_bytes(files, password="secret")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (files, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
+fn compress_bytes(
+    files: Vec<(String, Vec<u8>)>,
+    password: Option<&str>,
+    encryption: &str,
+    compression_level: u32,
+    suppress_warning: bool,
+) -> PyResult<Vec<u8>> {
+    let enc_method = EncryptionMethod::from_str(encryption)?;
+
+    // Warn about weak encryption
+    if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
+        eprintln!(
+            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+            Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
+        );
+    }
+
+    // Convert to the format expected by compression module
+    let file_refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(name, data)| (name.as_str(), data.as_slice()))
+        .collect();
+
+    let result = compression::compress_bytes(
+        &file_refs,
+        password,
+        enc_method,
+        CompressionLevel::new(compression_level),
+    )?;
+
+    Ok(result)
+}
+
+/// Decompress a ZIP archive from bytes in memory.
+///
+/// # Arguments
+/// * `data` - The ZIP archive data as bytes
+/// * `password` - Optional password for encrypted archives
+///
+/// # Returns
+/// * `list[tuple[str, bytes]]` - List of (filename, content) tuples
+///
+/// # Raises
+/// * `IOError` - If decompression fails
+/// * `ValueError` - If password is incorrect
+///
+/// # Example
+/// ```python
+/// import rustyzipper
+/// files = rustyzipper.decompress_bytes(zip_data, password="secret")
+/// for filename, content in files:
+///     print(f"{filename}: {len(content)} bytes")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (data, password=None))]
+fn decompress_bytes(
+    data: Vec<u8>,
+    password: Option<&str>,
+) -> PyResult<Vec<(String, Vec<u8>)>> {
+    let result = compression::decompress_bytes(&data, password)?;
+    Ok(result)
+}
+
+// ============================================================================
 // pyminizip Compatibility Functions
 // ============================================================================
 
@@ -181,8 +292,6 @@ fn compress(
     password: Option<&str>,
     compress_level: u32,
 ) -> PyResult<()> {
-    let _py = src.py();
-
     // Handle both single file and list of files
     let (paths, prefixes): (Vec<String>, Vec<Option<String>>) =
         if src.is_instance_of::<pyo3::types::PyList>() {
@@ -207,10 +316,10 @@ fn compress(
         };
 
     // Use ZipCrypto for pyminizip compatibility
-    let encryption = if password.is_some() {
-        "zipcrypto"
+    let enc_method = if password.is_some() {
+        EncryptionMethod::ZipCrypto
     } else {
-        "none"
+        EncryptionMethod::None
     };
 
     let path_refs: Vec<&Path> = paths.iter().map(|p| Path::new(p.as_str())).collect();
@@ -218,8 +327,6 @@ fn compress(
         .iter()
         .map(|p| p.as_ref().map(|s| s.as_str()))
         .collect();
-
-    let enc_method = EncryptionMethod::from_str(encryption)?;
 
     compression::compress_files(
         &path_refs,
@@ -262,6 +369,10 @@ fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress_files, m)?)?;
     m.add_function(wrap_pyfunction!(compress_directory, m)?)?;
     m.add_function(wrap_pyfunction!(decompress_file, m)?)?;
+
+    // In-memory compression functions
+    m.add_function(wrap_pyfunction!(compress_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(decompress_bytes, m)?)?;
 
     // pyminizip compatibility functions
     m.add_function(wrap_pyfunction!(compress, m)?)?;

@@ -1,7 +1,7 @@
 use crate::error::{Result, RustyZipError};
 use glob::Pattern;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::Path;
 use walkdir::WalkDir;
 use zip::unstable::write::FileOptionsExt;
@@ -19,6 +19,12 @@ pub enum EncryptionMethod {
     None,
 }
 
+impl Default for EncryptionMethod {
+    fn default() -> Self {
+        EncryptionMethod::Aes256
+    }
+}
+
 impl EncryptionMethod {
     pub fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
@@ -33,6 +39,12 @@ impl EncryptionMethod {
 /// Compression level (0-9)
 #[derive(Debug, Clone, Copy)]
 pub struct CompressionLevel(pub u32);
+
+impl Default for CompressionLevel {
+    fn default() -> Self {
+        CompressionLevel::DEFAULT
+    }
+}
 
 impl CompressionLevel {
     pub const STORE: CompressionLevel = CompressionLevel(0);
@@ -149,20 +161,28 @@ pub fn compress_directory(
         )));
     }
 
-    // Compile patterns
-    let include_patterns: Option<Vec<Pattern>> = include_patterns.map(|patterns| {
-        patterns
-            .iter()
-            .filter_map(|p| Pattern::new(p).ok())
-            .collect()
-    });
+    // Compile patterns - return error if any pattern is invalid
+    let include_patterns: Option<Vec<Pattern>> = match include_patterns {
+        Some(patterns) => {
+            let compiled: std::result::Result<Vec<Pattern>, _> = patterns
+                .iter()
+                .map(|p| Pattern::new(p).map_err(RustyZipError::from))
+                .collect();
+            Some(compiled?)
+        }
+        None => None,
+    };
 
-    let exclude_patterns: Option<Vec<Pattern>> = exclude_patterns.map(|patterns| {
-        patterns
-            .iter()
-            .filter_map(|p| Pattern::new(p).ok())
-            .collect()
-    });
+    let exclude_patterns: Option<Vec<Pattern>> = match exclude_patterns {
+        Some(patterns) => {
+            let compiled: std::result::Result<Vec<Pattern>, _> = patterns
+                .iter()
+                .map(|p| Pattern::new(p).map_err(RustyZipError::from))
+                .collect();
+            Some(compiled?)
+        }
+        None => None,
+    };
 
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
@@ -185,38 +205,14 @@ pub fn compress_directory(
             .to_string_lossy()
             .replace('\\', "/");
 
-        // Check include patterns
-        if let Some(ref patterns) = include_patterns {
-            if !patterns.iter().any(|p| p.matches(&relative_path)) {
-                // Also check just the filename
-                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if !patterns.iter().any(|p| p.matches(file_name)) {
-                    continue;
-                }
-            }
-        }
-
-        // Check exclude patterns
-        if let Some(ref patterns) = exclude_patterns {
-            if patterns.iter().any(|p| p.matches(&relative_path)) {
-                continue;
-            }
-            // Also check just the filename and directory names
-            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if patterns.iter().any(|p| p.matches(file_name)) {
-                continue;
-            }
-            // Check if any parent directory matches exclude pattern
-            let should_exclude = path.ancestors().any(|ancestor| {
-                if let Some(name) = ancestor.file_name().and_then(|n| n.to_str()) {
-                    patterns.iter().any(|p| p.matches(name))
-                } else {
-                    false
-                }
-            });
-            if should_exclude {
-                continue;
-            }
+        // Check if file should be included based on patterns
+        if !should_include_file(
+            path,
+            &relative_path,
+            include_patterns.as_ref(),
+            exclude_patterns.as_ref(),
+        ) {
+            continue;
         }
 
         add_file_to_zip(
@@ -233,10 +229,54 @@ pub fn compress_directory(
     Ok(())
 }
 
-/// Add a single file to a ZIP writer
-fn add_file_to_zip<W: Write + std::io::Seek>(
+/// Check if a file should be included based on include/exclude patterns
+fn should_include_file(
+    path: &Path,
+    relative_path: &str,
+    include_patterns: Option<&Vec<Pattern>>,
+    exclude_patterns: Option<&Vec<Pattern>>,
+) -> bool {
+    // Check include patterns - file must match at least one
+    if let Some(patterns) = include_patterns {
+        let matches_relative = patterns.iter().any(|p| p.matches(relative_path));
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let matches_filename = patterns.iter().any(|p| p.matches(file_name));
+        if !matches_relative && !matches_filename {
+            return false;
+        }
+    }
+
+    // Check exclude patterns - file must not match any
+    if let Some(patterns) = exclude_patterns {
+        // Check relative path
+        if patterns.iter().any(|p| p.matches(relative_path)) {
+            return false;
+        }
+        // Check filename
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if patterns.iter().any(|p| p.matches(file_name)) {
+            return false;
+        }
+        // Check if any parent directory matches exclude pattern
+        let ancestor_matches = path.ancestors().any(|ancestor| {
+            ancestor
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|name| patterns.iter().any(|p| p.matches(name)))
+                .unwrap_or(false)
+        });
+        if ancestor_matches {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Add bytes directly to a ZIP writer
+fn add_bytes_to_zip<W: Write + std::io::Seek>(
     zip: &mut ZipWriter<W>,
-    file_path: &Path,
+    data: &[u8],
     archive_name: &str,
     password: Option<&str>,
     encryption: EncryptionMethod,
@@ -269,12 +309,25 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
         }
     }
 
-    let mut input_file = File::open(file_path)?;
-    let mut buffer = Vec::new();
-    input_file.read_to_end(&mut buffer)?;
-    zip.write_all(&buffer)?;
+    zip.write_all(data)?;
 
     Ok(())
+}
+
+/// Add a single file to a ZIP writer
+fn add_file_to_zip<W: Write + std::io::Seek>(
+    zip: &mut ZipWriter<W>,
+    file_path: &Path,
+    archive_name: &str,
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> Result<()> {
+    let mut input_file = File::open(file_path)?;
+    let mut data = Vec::new();
+    input_file.read_to_end(&mut data)?;
+
+    add_bytes_to_zip(zip, &data, archive_name, password, encryption, compression_level)
 }
 
 /// Decompress a ZIP archive
@@ -341,6 +394,84 @@ pub fn decompress_file(
 pub fn delete_file(path: &Path) -> Result<()> {
     fs::remove_file(path)?;
     Ok(())
+}
+
+/// Compress multiple byte arrays into a ZIP archive in memory
+///
+/// # Arguments
+/// * `files` - Slice of (archive_name, data) tuples
+/// * `password` - Optional password for encryption
+/// * `encryption` - Encryption method to use
+/// * `compression_level` - Compression level (0-9)
+///
+/// # Returns
+/// The compressed ZIP archive as a byte vector
+pub fn compress_bytes(
+    files: &[(&str, &[u8])],
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> Result<Vec<u8>> {
+    let cursor = Cursor::new(Vec::new());
+    let mut zip = ZipWriter::new(cursor);
+
+    for (archive_name, data) in files {
+        add_bytes_to_zip(
+            &mut zip,
+            data,
+            archive_name,
+            password,
+            encryption,
+            compression_level,
+        )?;
+    }
+
+    let cursor = zip.finish()?;
+    Ok(cursor.into_inner())
+}
+
+/// Decompress a ZIP archive from bytes in memory
+///
+/// # Arguments
+/// * `data` - The ZIP archive data
+/// * `password` - Optional password for encrypted archives
+///
+/// # Returns
+/// A vector of (filename, content) tuples
+pub fn decompress_bytes(
+    data: &[u8],
+    password: Option<&str>,
+) -> Result<Vec<(String, Vec<u8>)>> {
+    let cursor = Cursor::new(data);
+    let mut archive = ZipArchive::new(cursor)?;
+
+    let mut results = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut file = match password {
+            Some(pwd) => match archive.by_index_decrypt(i, pwd.as_bytes()) {
+                Ok(f) => f,
+                Err(zip::result::ZipError::InvalidPassword) => {
+                    return Err(RustyZipError::InvalidPassword);
+                }
+                Err(e) => return Err(e.into()),
+            },
+            None => archive.by_index(i)?,
+        };
+
+        // Skip directories
+        if file.is_dir() {
+            continue;
+        }
+
+        let name = file.name().to_string();
+        let mut content = Vec::new();
+        file.read_to_end(&mut content)?;
+
+        results.push((name, content));
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -1015,5 +1146,238 @@ mod tests {
         let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
         assert_eq!(extracted_data.len(), data.len());
         assert_eq!(extracted_data, data);
+    }
+
+    // ========================================================================
+    // In-Memory Compression Tests
+    // ========================================================================
+
+    #[test]
+    fn test_compress_decompress_bytes_no_password() {
+        let files = vec![
+            ("hello.txt", b"Hello, World!".as_slice()),
+            ("data.bin", &[0u8, 1, 2, 3, 4, 5]),
+        ];
+
+        // Compress
+        let zip_data = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        assert!(!zip_data.is_empty());
+
+        // Decompress
+        let result = decompress_bytes(&zip_data, None).unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].0, "hello.txt");
+        assert_eq!(result[0].1, b"Hello, World!");
+        assert_eq!(result[1].0, "data.bin");
+        assert_eq!(result[1].1, &[0u8, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_compress_decompress_bytes_with_password_aes256() {
+        let files = vec![("secret.txt", b"Secret data".as_slice())];
+
+        // Compress with AES-256
+        let zip_data = compress_bytes(
+            &files,
+            Some("password123"),
+            EncryptionMethod::Aes256,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress with correct password
+        let result = decompress_bytes(&zip_data, Some("password123")).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "secret.txt");
+        assert_eq!(result[0].1, b"Secret data");
+    }
+
+    #[test]
+    fn test_compress_decompress_bytes_with_password_zipcrypto() {
+        let files = vec![("legacy.txt", b"Legacy encrypted".as_slice())];
+
+        // Compress with ZipCrypto
+        let zip_data = compress_bytes(
+            &files,
+            Some("pass"),
+            EncryptionMethod::ZipCrypto,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress with correct password
+        let result = decompress_bytes(&zip_data, Some("pass")).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "legacy.txt");
+        assert_eq!(result[0].1, b"Legacy encrypted");
+    }
+
+    #[test]
+    fn test_decompress_bytes_wrong_password() {
+        let files = vec![("test.txt", b"Test".as_slice())];
+
+        // Compress with password
+        let zip_data = compress_bytes(
+            &files,
+            Some("correct"),
+            EncryptionMethod::Aes256,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress with wrong password
+        let result = decompress_bytes(&zip_data, Some("wrong"));
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            RustyZipError::InvalidPassword => {}
+            e => panic!("Expected InvalidPassword error, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_compress_bytes_empty_file() {
+        let files = vec![("empty.txt", b"".as_slice())];
+
+        // Compress
+        let zip_data = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress
+        let result = decompress_bytes(&zip_data, None).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "empty.txt");
+        assert_eq!(result[0].1, b"");
+    }
+
+    #[test]
+    fn test_compress_bytes_with_subdirectory() {
+        let files = vec![
+            ("root.txt", b"Root file".as_slice()),
+            ("subdir/nested.txt", b"Nested file".as_slice()),
+            ("subdir/deep/file.txt", b"Deep nested".as_slice()),
+        ];
+
+        // Compress
+        let zip_data = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress
+        let result = decompress_bytes(&zip_data, None).unwrap();
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].0, "root.txt");
+        assert_eq!(result[1].0, "subdir/nested.txt");
+        assert_eq!(result[2].0, "subdir/deep/file.txt");
+    }
+
+    #[test]
+    fn test_compress_bytes_binary_data() {
+        // Binary data with all byte values
+        let binary_data: Vec<u8> = (0u8..=255).collect();
+        let files = vec![("binary.bin", binary_data.as_slice())];
+
+        // Compress
+        let zip_data = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress
+        let result = decompress_bytes(&zip_data, None).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].1, binary_data);
+    }
+
+    #[test]
+    fn test_compress_bytes_compression_levels() {
+        let data = b"AAAA".repeat(1000);
+        let files = vec![("data.txt", data.as_slice())];
+
+        // Test STORE (no compression)
+        let zip_store = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::STORE,
+        )
+        .unwrap();
+
+        // Test BEST compression
+        let zip_best = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::BEST,
+        )
+        .unwrap();
+
+        // BEST should be smaller than STORE for repetitive data
+        assert!(zip_best.len() < zip_store.len());
+
+        // Both should decompress correctly
+        let result_store = decompress_bytes(&zip_store, None).unwrap();
+        let result_best = decompress_bytes(&zip_best, None).unwrap();
+
+        assert_eq!(result_store[0].1, data);
+        assert_eq!(result_best[0].1, data);
+    }
+
+    #[test]
+    fn test_compress_bytes_multiple_files() {
+        let files: Vec<(&str, &[u8])> = (0..10)
+            .map(|i| {
+                let name = format!("file{}.txt", i);
+                let content = format!("Content {}", i);
+                // Leak to get 'static lifetime for test
+                (
+                    Box::leak(name.into_boxed_str()) as &str,
+                    Box::leak(content.into_bytes().into_boxed_slice()) as &[u8],
+                )
+            })
+            .collect();
+
+        // Compress
+        let zip_data = compress_bytes(
+            &files,
+            None,
+            EncryptionMethod::None,
+            CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress
+        let result = decompress_bytes(&zip_data, None).unwrap();
+
+        assert_eq!(result.len(), 10);
+        for (i, (name, content)) in result.iter().enumerate() {
+            assert_eq!(name, &format!("file{}.txt", i));
+            assert_eq!(content, format!("Content {}", i).as_bytes());
+        }
     }
 }

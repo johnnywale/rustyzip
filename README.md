@@ -237,7 +237,6 @@ pytest python/tests/
 | zlib Version | Outdated | Latest |
 | AES-256 Support | No | Yes |
 | Performance | Baseline | 2-5x faster |
-| Memory Safety | C/C++ risks | Rust guarantees |
 | Windows Explorer Support | Yes (ZipCrypto) | Yes (ZipCrypto) |
 | API Compatibility | N/A | Drop-in replacement |
 | Installation | Requires compiler | Prebuilt wheels |

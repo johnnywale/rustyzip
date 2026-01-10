@@ -21,10 +21,16 @@ Example usage:
     >>>
     >>> # Decompress
     >>> decompress_file("secure.zip", "extracted/", password="MyP@ssw0rd")
+    >>>
+    >>> # In-memory compression (no filesystem I/O)
+    >>> from rustyzipper import compress_bytes, decompress_bytes
+    >>> files = [("hello.txt", b"Hello World"), ("data.bin", b"\\x00\\x01\\x02")]
+    >>> zip_data = compress_bytes(files, password="secret")
+    >>> extracted = decompress_bytes(zip_data, password="secret")
 """
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 
 # Import the Rust extension module
 from . import rustyzip as _rust
@@ -32,10 +38,15 @@ from . import rustyzip as _rust
 
 __version__ = _rust.__version__
 __all__ = [
+    # File-based compression
     "compress_file",
     "compress_files",
     "compress_directory",
     "decompress_file",
+    # In-memory compression
+    "compress_bytes",
+    "decompress_bytes",
+    # Enums
     "EncryptionMethod",
     "CompressionLevel",
     "__version__",
@@ -222,3 +233,101 @@ def decompress_file(
         >>> decompress_file("archive.zip", "extracted/", password="secret")
     """
     _rust.decompress_file(input_path, output_path, password)
+
+
+# =============================================================================
+# In-Memory Compression Functions
+# =============================================================================
+
+
+def compress_bytes(
+    files: List[Tuple[str, bytes]],
+    password: Optional[str] = None,
+    encryption: EncryptionMethod = EncryptionMethod.AES256,
+    compression_level: Union[CompressionLevel, int] = CompressionLevel.DEFAULT,
+    suppress_warning: bool = False,
+) -> bytes:
+    """Compress bytes directly to a ZIP archive in memory.
+
+    This function allows compressing data without writing to the filesystem,
+    useful for web applications, APIs, or processing data in memory.
+
+    Args:
+        files: List of (archive_name, data) tuples. Each tuple contains:
+               - archive_name: The filename to use in the ZIP archive (can include paths like "subdir/file.txt")
+               - data: The bytes content to compress
+        password: Optional password for encryption. If None, no encryption is used.
+        encryption: Encryption method to use. Defaults to AES256.
+        compression_level: Compression level (0-9 or CompressionLevel enum). Defaults to DEFAULT (6).
+        suppress_warning: If True, suppresses security warnings for weak encryption.
+
+    Returns:
+        The compressed ZIP archive as bytes.
+
+    Raises:
+        IOError: If compression fails.
+        ValueError: If parameters are invalid.
+
+    Example:
+        >>> # Compress multiple files to bytes
+        >>> files = [
+        ...     ("hello.txt", b"Hello, World!"),
+        ...     ("data/info.json", b'{"key": "value"}'),
+        ... ]
+        >>> zip_data = compress_bytes(files, password="secret")
+        >>>
+        >>> # Write to file if needed
+        >>> with open("archive.zip", "wb") as f:
+        ...     f.write(zip_data)
+        >>>
+        >>> # Or send over network, store in database, etc.
+    """
+    enc_value = encryption.value if isinstance(encryption, EncryptionMethod) else encryption
+    level = compression_level.value if isinstance(compression_level, CompressionLevel) else compression_level
+
+    return bytes(_rust.compress_bytes(
+        files,
+        password,
+        enc_value,
+        level,
+        suppress_warning,
+    ))
+
+
+def decompress_bytes(
+    data: bytes,
+    password: Optional[str] = None,
+) -> List[Tuple[str, bytes]]:
+    """Decompress a ZIP archive from bytes in memory.
+
+    This function allows decompressing ZIP data without reading from the filesystem,
+    useful for web applications, APIs, or processing data in memory.
+
+    Args:
+        data: The ZIP archive data as bytes.
+        password: Optional password for encrypted archives.
+
+    Returns:
+        List of (filename, content) tuples. Each tuple contains:
+        - filename: The name of the file in the archive (may include path like "subdir/file.txt")
+        - content: The decompressed bytes content
+
+    Raises:
+        IOError: If decompression fails.
+        ValueError: If password is incorrect.
+
+    Example:
+        >>> # Decompress from bytes
+        >>> files = decompress_bytes(zip_data, password="secret")
+        >>> for filename, content in files:
+        ...     print(f"{filename}: {len(content)} bytes")
+        ...
+        hello.txt: 13 bytes
+        data/info.json: 16 bytes
+        >>>
+        >>> # Access specific file
+        >>> content_dict = {name: data for name, data in files}
+        >>> hello_content = content_dict["hello.txt"]
+    """
+    result = _rust.decompress_bytes(data, password)
+    return [(name, bytes(content)) for name, content in result]
