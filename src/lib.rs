@@ -162,6 +162,8 @@ fn compress_directory(
 /// * `input_path` - Path to the ZIP file to decompress
 /// * `output_path` - Path for the output directory
 /// * `password` - Optional password for encrypted archives
+/// * `withoutpath` - If true, extract files without their directory paths (flatten).
+///                   Defaults to false.
 ///
 /// # Returns
 /// * `None` on success
@@ -170,9 +172,9 @@ fn compress_directory(
 /// * `IOError` - If file operations fail
 /// * `ValueError` - If password is incorrect
 #[pyfunction]
-#[pyo3(signature = (input_path, output_path, password=None))]
-fn decompress_file(input_path: &str, output_path: &str, password: Option<&str>) -> PyResult<()> {
-    compression::decompress_file(Path::new(input_path), Path::new(output_path), password)?;
+#[pyo3(signature = (input_path, output_path, password=None, withoutpath=false))]
+fn decompress_file(input_path: &str, output_path: &str, password: Option<&str>, withoutpath: bool) -> PyResult<()> {
+    compression::decompress_file(Path::new(input_path), Path::new(output_path), password, withoutpath)?;
 
     Ok(())
 }
@@ -467,15 +469,11 @@ fn compress(
 /// * `src` - Source ZIP file path
 /// * `password` - Password for encrypted archives
 /// * `dst` - Destination directory path
-/// * `delete_zip` - Whether to delete the ZIP file after extraction
+/// * `withoutpath` - If non-zero, extract files without their directory paths (flatten)
 #[pyfunction]
-#[pyo3(signature = (src, password, dst, delete_zip))]
-fn uncompress(src: &str, password: Option<&str>, dst: &str, delete_zip: bool) -> PyResult<()> {
-    compression::decompress_file(Path::new(src), Path::new(dst), password)?;
-
-    if delete_zip {
-        compression::delete_file(Path::new(src))?;
-    }
+#[pyo3(signature = (src, password, dst, withoutpath))]
+fn uncompress(src: &str, password: Option<&str>, dst: &str, withoutpath: i32) -> PyResult<()> {
+    compression::decompress_file(Path::new(src), Path::new(dst), password, withoutpath != 0)?;
 
     Ok(())
 }

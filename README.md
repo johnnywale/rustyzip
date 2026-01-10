@@ -66,7 +66,7 @@ from rustyzipper.compat import pyminizip
 
 # Rest of your code works as-is!
 pyminizip.compress("file.txt", None, "output.zip", "password", 5)
-pyminizip.uncompress("output.zip", "password", "extracted/", False)
+pyminizip.uncompress("output.zip", "password", "extracted/", 0)
 ```
 
 ## Features
