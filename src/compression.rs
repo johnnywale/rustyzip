@@ -1,7 +1,7 @@
 use crate::error::{Result, RustyZipError};
 use glob::Pattern;
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Seek, Write};
 use std::path::Path;
 use walkdir::WalkDir;
 use zip::unstable::write::FileOptionsExt;
@@ -38,6 +38,7 @@ impl EncryptionMethod {
 
 /// Compression level (0-9)
 #[derive(Debug, Clone, Copy)]
+
 pub struct CompressionLevel(pub u32);
 
 impl Default for CompressionLevel {
@@ -47,16 +48,20 @@ impl Default for CompressionLevel {
 }
 
 impl CompressionLevel {
+    #[allow(dead_code)]
     pub const STORE: CompressionLevel = CompressionLevel(0);
+    #[allow(dead_code)]
     pub const FAST: CompressionLevel = CompressionLevel(1);
+    #[allow(dead_code)]
     pub const DEFAULT: CompressionLevel = CompressionLevel(6);
+    #[allow(dead_code)]
     pub const BEST: CompressionLevel = CompressionLevel(9);
 
     pub fn new(level: u32) -> Self {
         CompressionLevel(level.min(9))
     }
-
-    pub fn to_flate2_compression(&self) -> flate2::Compression {
+    #[allow(dead_code)]
+    pub fn to_flate2_compression(self) -> flate2::Compression {
         flate2::Compression::new(self.0)
     }
 }
@@ -327,7 +332,14 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
     let mut data = Vec::new();
     input_file.read_to_end(&mut data)?;
 
-    add_bytes_to_zip(zip, &data, archive_name, password, encryption, compression_level)
+    add_bytes_to_zip(
+        zip,
+        &data,
+        archive_name,
+        password,
+        encryption,
+        compression_level,
+    )
 }
 
 /// Decompress a ZIP archive
@@ -438,13 +450,152 @@ pub fn compress_bytes(
 ///
 /// # Returns
 /// A vector of (filename, content) tuples
-pub fn decompress_bytes(
-    data: &[u8],
-    password: Option<&str>,
-) -> Result<Vec<(String, Vec<u8>)>> {
+pub fn decompress_bytes(data: &[u8], password: Option<&str>) -> Result<Vec<(String, Vec<u8>)>> {
     let cursor = Cursor::new(data);
     let mut archive = ZipArchive::new(cursor)?;
 
+    let mut results = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut file = match password {
+            Some(pwd) => match archive.by_index_decrypt(i, pwd.as_bytes()) {
+                Ok(f) => f,
+                Err(zip::result::ZipError::InvalidPassword) => {
+                    return Err(RustyZipError::InvalidPassword);
+                }
+                Err(e) => return Err(e.into()),
+            },
+            None => archive.by_index(i)?,
+        };
+
+        // Skip directories
+        if file.is_dir() {
+            continue;
+        }
+
+        let name = file.name().to_string();
+        let mut content = Vec::new();
+        file.read_to_end(&mut content)?;
+
+        results.push((name, content));
+    }
+
+    Ok(results)
+}
+
+// ============================================================================
+// Streaming Compression Functions
+// ============================================================================
+
+/// Compress data from a reader to a writer in streaming fashion.
+///
+/// This function reads data in chunks and writes compressed output,
+/// avoiding loading the entire file into memory.
+///
+/// # Arguments
+/// * `output` - A Write + Seek destination for the ZIP archive
+/// * `files` - Iterator of (archive_name, reader) pairs
+/// * `password` - Optional password for encryption
+/// * `encryption` - Encryption method to use
+/// * `compression_level` - Compression level (0-9)
+pub fn compress_stream<W, R, I>(
+    output: W,
+    files: I,
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> Result<()>
+where
+    W: Write + Seek,
+    R: Read,
+    I: IntoIterator<Item = (String, R)>,
+{
+    let mut zip = ZipWriter::new(output);
+
+    for (archive_name, mut reader) in files {
+        add_reader_to_zip(
+            &mut zip,
+            &mut reader,
+            &archive_name,
+            password,
+            encryption,
+            compression_level,
+        )?;
+    }
+
+    zip.finish()?;
+    Ok(())
+}
+
+/// Add data from a reader to the ZIP archive, streaming in chunks.
+fn add_reader_to_zip<W, R>(
+    zip: &mut ZipWriter<W>,
+    reader: &mut R,
+    archive_name: &str,
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> Result<()>
+where
+    W: Write + Seek,
+    R: Read,
+{
+    let (compression_method, level_option) = if compression_level.0 == 0 {
+        (CompressionMethod::Stored, None)
+    } else {
+        (
+            CompressionMethod::Deflated,
+            Some(compression_level.0 as i64),
+        )
+    };
+
+    let base_options = SimpleFileOptions::default()
+        .compression_method(compression_method)
+        .compression_level(level_option);
+
+    match (password, encryption) {
+        (Some(pwd), EncryptionMethod::Aes256) => {
+            let options = base_options.with_aes_encryption(AesMode::Aes256, pwd);
+            zip.start_file(archive_name, options)?;
+        }
+        (Some(pwd), EncryptionMethod::ZipCrypto) => {
+            let options = base_options.with_deprecated_encryption(pwd.as_bytes());
+            zip.start_file(archive_name, options)?;
+        }
+        _ => {
+            zip.start_file(archive_name, base_options)?;
+        }
+    }
+
+    // Stream data in chunks (64KB)
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        zip.write_all(&buffer[..bytes_read])?;
+    }
+
+    Ok(())
+}
+
+/// Decompress a ZIP archive from a seekable reader, returning file info.
+///
+/// # Arguments
+/// * `input` - A Read + Seek source containing the ZIP archive
+/// * `password` - Optional password for encrypted archives
+///
+/// # Returns
+/// A vector of (filename, content) tuples
+pub fn decompress_stream_to_vec<R>(
+    input: R,
+    password: Option<&str>,
+) -> Result<Vec<(String, Vec<u8>)>>
+where
+    R: Read + Seek,
+{
+    let mut archive = ZipArchive::new(input)?;
     let mut results = Vec::new();
 
     for i in 0..archive.len() {
@@ -1329,13 +1480,8 @@ mod tests {
         .unwrap();
 
         // Test BEST compression
-        let zip_best = compress_bytes(
-            &files,
-            None,
-            EncryptionMethod::None,
-            CompressionLevel::BEST,
-        )
-        .unwrap();
+        let zip_best =
+            compress_bytes(&files, None, EncryptionMethod::None, CompressionLevel::BEST).unwrap();
 
         // BEST should be smaller than STORE for repetitive data
         assert!(zip_best.len() < zip_store.len());
