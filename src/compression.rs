@@ -730,7 +730,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_file = extract_path.join("test.txt");
         assert!(extracted_file.exists());
@@ -763,7 +763,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress with correct password
-        decompress_file(&output_path, &extract_path, Some("password123")).unwrap();
+        decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
 
         let extracted_file = extract_path.join("secret.txt");
         assert!(extracted_file.exists());
@@ -870,7 +870,7 @@ mod tests {
         let input_path = temp_dir.path().join("nonexistent.zip");
         let output_path = temp_dir.path().join("extracted");
 
-        let result = decompress_file(&input_path, &output_path, None);
+        let result = decompress_file(&input_path, &output_path, None, false);
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -901,7 +901,7 @@ mod tests {
         .unwrap();
 
         // Try to decompress with wrong password
-        let result = decompress_file(&output_path, &extract_path, Some("wrong_password"));
+        let result = decompress_file(&output_path, &extract_path, Some("wrong_password"), false);
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -934,7 +934,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, Some("password")).unwrap();
+        decompress_file(&output_path, &extract_path, Some("password"), false).unwrap();
 
         let extracted_file = extract_path.join("zipcrypto.txt");
         assert!(extracted_file.exists());
@@ -971,7 +971,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify all files
         assert_eq!(
@@ -1012,7 +1012,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify files are in correct directories
         assert!(extract_path.join("dir1").join("file1.txt").exists());
@@ -1053,7 +1053,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify structure
         assert!(extract_path.join("file1.txt").exists());
@@ -1089,7 +1089,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify only .txt files are included
         assert!(extract_path.join("file1.txt").exists());
@@ -1126,7 +1126,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify excluded files are not included
         assert!(extract_path.join("file1.txt").exists());
@@ -1183,7 +1183,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_file = extract_path.join("empty.txt");
         assert!(extracted_file.exists());
@@ -1212,7 +1212,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_data = fs::read(extract_path.join("binary.bin")).unwrap();
         assert_eq!(extracted_data, binary_data);
@@ -1239,7 +1239,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_content = fs::read_to_string(extract_path.join("stored.txt")).unwrap();
         assert_eq!(extracted_content, content);
@@ -1267,7 +1267,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_content = fs::read_to_string(extract_path.join("best.txt")).unwrap();
         assert_eq!(extracted_content, content);
@@ -1339,7 +1339,7 @@ mod tests {
         .unwrap();
 
         // Should be able to decompress without password
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let content = fs::read_to_string(extract_path.join("test.txt")).unwrap();
         assert_eq!(content, "Test content");
@@ -1367,7 +1367,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
         assert_eq!(extracted_data.len(), data.len());

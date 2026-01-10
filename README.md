@@ -1,6 +1,6 @@
 # rustyzipper
 
-[![CI](https://github.com/johnnywale/rustyzipper/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywale/rustyzipper/actions/workflows/ci.yml)
+[![CI](https://github.com/johnnywale/rustyzip/actions/workflows/ci.yml/badge.svg)](https://github.com/johnnywale/rustyzip/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
 [![Python](https://img.shields.io/pypi/pyversions/rustyzipper.svg)](https://pypi.org/project/rustyzipper/)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
