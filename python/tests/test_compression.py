@@ -172,6 +172,31 @@ class TestDecompressFile:
         with pytest.raises(IOError):
             decompress_file("nonexistent.zip", extract_dir)
 
+    def test_decompress_preserves_timestamp(self, temp_dir, sample_file):
+        """Test that decompression preserves file modification time."""
+        import time as time_module
+
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        # Set a specific modification time on the source file (1 hour ago)
+        old_mtime = time_module.time() - 3600
+        os.utime(sample_file, (old_mtime, old_mtime))
+
+        # Compress and decompress
+        compress_file(sample_file, zip_file, encryption=EncryptionMethod.NONE)
+        decompress_file(zip_file, extract_dir)
+
+        extracted_file = os.path.join(extract_dir, "sample.txt")
+        assert os.path.exists(extracted_file)
+
+        # Check that the modification time is preserved (within 2 seconds tolerance
+        # due to ZIP format's 2-second resolution)
+        extracted_mtime = os.path.getmtime(extracted_file)
+        assert abs(extracted_mtime - old_mtime) < 3, (
+            f"Timestamp not preserved: expected ~{old_mtime}, got {extracted_mtime}"
+        )
+
 
 class TestCompressFiles:
     """Tests for compress_files function."""

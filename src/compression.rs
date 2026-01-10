@@ -1,4 +1,5 @@
 use crate::error::{Result, RustyZipError};
+use filetime::FileTime;
 use glob::Pattern;
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Seek, Write};
@@ -287,6 +288,19 @@ fn add_bytes_to_zip<W: Write + std::io::Seek>(
     encryption: EncryptionMethod,
     compression_level: CompressionLevel,
 ) -> Result<()> {
+    add_bytes_to_zip_with_time(zip, data, archive_name, password, encryption, compression_level, None)
+}
+
+/// Add bytes directly to a ZIP writer with optional modification time
+fn add_bytes_to_zip_with_time<W: Write + std::io::Seek>(
+    zip: &mut ZipWriter<W>,
+    data: &[u8],
+    archive_name: &str,
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+    last_modified: Option<zip::DateTime>,
+) -> Result<()> {
     let (compression_method, level_option) = if compression_level.0 == 0 {
         (CompressionMethod::Stored, None)
     } else {
@@ -296,9 +310,14 @@ fn add_bytes_to_zip<W: Write + std::io::Seek>(
         )
     };
 
-    let base_options = SimpleFileOptions::default()
+    let mut base_options = SimpleFileOptions::default()
         .compression_method(compression_method)
         .compression_level(level_option);
+
+    // Set modification time if provided
+    if let Some(mtime) = last_modified {
+        base_options = base_options.last_modified_time(mtime);
+    }
 
     match (password, encryption) {
         (Some(pwd), EncryptionMethod::Aes256) => {
@@ -319,6 +338,16 @@ fn add_bytes_to_zip<W: Write + std::io::Seek>(
     Ok(())
 }
 
+/// Convert a SystemTime to zip::DateTime
+fn system_time_to_zip_datetime(system_time: std::time::SystemTime) -> Option<zip::DateTime> {
+    use time::OffsetDateTime;
+
+    let duration = system_time.duration_since(std::time::UNIX_EPOCH).ok()?;
+    let datetime = OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64).ok()?;
+
+    zip::DateTime::try_from(datetime).ok()
+}
+
 /// Add a single file to a ZIP writer
 fn add_file_to_zip<W: Write + std::io::Seek>(
     zip: &mut ZipWriter<W>,
@@ -332,21 +361,36 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
     let mut data = Vec::new();
     input_file.read_to_end(&mut data)?;
 
-    add_bytes_to_zip(
+    // Get the file's modification time
+    let last_modified = input_file
+        .metadata()
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(system_time_to_zip_datetime);
+
+    add_bytes_to_zip_with_time(
         zip,
         &data,
         archive_name,
         password,
         encryption,
         compression_level,
+        last_modified,
     )
 }
 
 /// Decompress a ZIP archive
+///
+/// # Arguments
+/// * `input_path` - Path to the ZIP file
+/// * `output_path` - Directory to extract files to
+/// * `password` - Optional password for encrypted archives
+/// * `withoutpath` - If true, extract files without their directory paths (flatten)
 pub fn decompress_file(
     input_path: &Path,
     output_path: &Path,
     password: Option<&str>,
+    withoutpath: bool,
 ) -> Result<()> {
     if !input_path.exists() {
         return Err(RustyZipError::FileNotFound(
@@ -374,19 +418,50 @@ pub fn decompress_file(
             None => archive.by_index(i)?,
         };
 
-        let outpath = output_path.join(file.mangled_name());
-
+        // Skip directories when withoutpath is enabled
         if file.is_dir() {
-            fs::create_dir_all(&outpath)?;
+            if !withoutpath {
+                let outpath = output_path.join(file.mangled_name());
+                fs::create_dir_all(&outpath)?;
+            }
+            // When withoutpath is true, we skip creating directories
+            continue;
+        }
+
+        // Determine output path based on withoutpath flag
+        let outpath = if withoutpath {
+            // Extract only the filename, stripping all directory components
+            let mangled = file.mangled_name();
+            let filename = mangled
+                .file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new("unnamed"));
+            output_path.join(filename)
         } else {
+            output_path.join(file.mangled_name())
+        };
+
+        // Create parent directories if needed (only when preserving paths)
+        if !withoutpath {
             if let Some(parent) = outpath.parent() {
                 if !parent.exists() {
                     fs::create_dir_all(parent)?;
                 }
             }
+        }
 
-            let mut outfile = File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
+        let mut outfile = File::create(&outpath)?;
+        std::io::copy(&mut file, &mut outfile)?;
+
+        // Set file modification time to match the original
+        if let Some(last_modified) = file.last_modified() {
+            // Convert zip DateTime to Unix timestamp using OffsetDateTime
+            use time::OffsetDateTime;
+            if let Ok(time) = OffsetDateTime::try_from(last_modified) {
+                let unix_timestamp = time.unix_timestamp();
+                let mtime = FileTime::from_unix_time(unix_timestamp, 0);
+                // Ignore errors when setting time - not critical
+                let _ = filetime::set_file_mtime(&outpath, mtime);
+            }
         }
 
         // Set permissions on Unix
@@ -655,7 +730,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_file = extract_path.join("test.txt");
         assert!(extracted_file.exists());
@@ -688,7 +763,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress with correct password
-        decompress_file(&output_path, &extract_path, Some("password123")).unwrap();
+        decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
 
         let extracted_file = extract_path.join("secret.txt");
         assert!(extracted_file.exists());
@@ -795,7 +870,7 @@ mod tests {
         let input_path = temp_dir.path().join("nonexistent.zip");
         let output_path = temp_dir.path().join("extracted");
 
-        let result = decompress_file(&input_path, &output_path, None);
+        let result = decompress_file(&input_path, &output_path, None, false);
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -826,7 +901,7 @@ mod tests {
         .unwrap();
 
         // Try to decompress with wrong password
-        let result = decompress_file(&output_path, &extract_path, Some("wrong_password"));
+        let result = decompress_file(&output_path, &extract_path, Some("wrong_password"), false);
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -859,7 +934,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, Some("password")).unwrap();
+        decompress_file(&output_path, &extract_path, Some("password"), false).unwrap();
 
         let extracted_file = extract_path.join("zipcrypto.txt");
         assert!(extracted_file.exists());
@@ -896,7 +971,7 @@ mod tests {
         assert!(output_path.exists());
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify all files
         assert_eq!(
@@ -937,7 +1012,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify files are in correct directories
         assert!(extract_path.join("dir1").join("file1.txt").exists());
@@ -978,7 +1053,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify structure
         assert!(extract_path.join("file1.txt").exists());
@@ -1014,7 +1089,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify only .txt files are included
         assert!(extract_path.join("file1.txt").exists());
@@ -1051,7 +1126,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         // Verify excluded files are not included
         assert!(extract_path.join("file1.txt").exists());
@@ -1108,7 +1183,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_file = extract_path.join("empty.txt");
         assert!(extracted_file.exists());
@@ -1137,7 +1212,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_data = fs::read(extract_path.join("binary.bin")).unwrap();
         assert_eq!(extracted_data, binary_data);
@@ -1164,7 +1239,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_content = fs::read_to_string(extract_path.join("stored.txt")).unwrap();
         assert_eq!(extracted_content, content);
@@ -1192,7 +1267,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_content = fs::read_to_string(extract_path.join("best.txt")).unwrap();
         assert_eq!(extracted_content, content);
@@ -1264,7 +1339,7 @@ mod tests {
         .unwrap();
 
         // Should be able to decompress without password
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let content = fs::read_to_string(extract_path.join("test.txt")).unwrap();
         assert_eq!(content, "Test content");
@@ -1292,7 +1367,7 @@ mod tests {
         .unwrap();
 
         // Decompress
-        decompress_file(&output_path, &extract_path, None).unwrap();
+        decompress_file(&output_path, &extract_path, None, false).unwrap();
 
         let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
         assert_eq!(extracted_data.len(), data.len());
