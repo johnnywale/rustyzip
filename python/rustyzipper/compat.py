@@ -13,6 +13,7 @@ Usage:
 
     # Rest of your code works as-is!
     pyminizip.compress("file.txt", None, "output.zip", "password", 5)
+    pyminizip.compress_multiple(["file1.txt", "file2.txt"], [], "output.zip", "password", 5, progress_callback)
     pyminizip.uncompress("output.zip", "password", "extracted/", False)
 
 Note:
@@ -21,7 +22,7 @@ Note:
     consider using the modern rustyzip API with AES256 encryption.
 """
 
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from rustyzipper import rustyzip as _rust
 
@@ -64,6 +65,58 @@ class _PyminizipCompat:
             ... )
         """
         _rust.compress(src, src_prefix, dst, password, compress_level)
+
+    @staticmethod
+    def compress_multiple(
+        src_files: List[str],
+        src_prefixes: List[str],
+        dst: str,
+        password: Optional[str],
+        compress_level: int,
+        progress: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        """Compress multiple files to a ZIP archive with optional progress callback.
+
+        This function provides API compatibility with pyminizip.compress_multiple().
+
+        Args:
+            src_files: List of source file paths to compress.
+            src_prefixes: List of prefix paths in archive for each file.
+                         Use [] for no prefixes.
+            dst: Destination ZIP file path.
+            password: Password for encryption (uses ZipCrypto for compatibility).
+                     Use None for no encryption.
+            compress_level: Compression level (1-9).
+            progress: Optional callback function that takes one argument - the count
+                     of how many files have been compressed. Called after compression.
+
+        Raises:
+            IOError: If file operations fail.
+
+        Example:
+            >>> def on_progress(count):
+            ...     print(f"Compressed {count} files")
+            >>> pyminizip.compress_multiple(
+            ...     ["file1.txt", "file2.txt"],
+            ...     ["/path1", "/path2"],
+            ...     "output.zip",
+            ...     "password",
+            ...     5,
+            ...     on_progress
+            ... )
+        """
+        # Convert empty list to None prefixes
+        prefixes: List[Optional[str]]
+        if not src_prefixes:
+            prefixes = [None] * len(src_files)
+        else:
+            prefixes = [p if p else None for p in src_prefixes]
+
+        _rust.compress(src_files, prefixes, dst, password, compress_level)
+
+        # Call progress callback with total count after compression
+        if progress is not None:
+            progress(len(src_files))
 
     @staticmethod
     def uncompress(
