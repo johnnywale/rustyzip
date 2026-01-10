@@ -1245,3 +1245,235 @@ class TestOpenZipStreamFromFile:
 
         assert reader.file_count == 2
         assert reader.total_entries >= 2  # May include directory entries
+
+
+class TestPyminizipCompatCompressMultiple:
+    """Tests for pyminizip compatibility compress_multiple function."""
+
+    def test_compress_multiple_basic(self, temp_dir):
+        """Test basic compress_multiple without progress callback."""
+        from rustyzipper.compat import pyminizip
+
+        # Create test files
+        file1 = os.path.join(temp_dir, "file1.txt")
+        file2 = os.path.join(temp_dir, "file2.txt")
+        with open(file1, "w") as f:
+            f.write("Content of file 1")
+        with open(file2, "w") as f:
+            f.write("Content of file 2")
+
+        output = os.path.join(temp_dir, "output.zip")
+
+        pyminizip.compress_multiple(
+            [file1, file2],
+            [],
+            output,
+            None,
+            5,
+        )
+
+        assert os.path.exists(output)
+        assert os.path.getsize(output) > 0
+
+        # Verify contents by extracting
+        extract_dir = os.path.join(temp_dir, "extracted")
+        decompress_file(output, extract_dir)
+        assert os.path.exists(os.path.join(extract_dir, "file1.txt"))
+        assert os.path.exists(os.path.join(extract_dir, "file2.txt"))
+
+    def test_compress_multiple_with_password(self, temp_dir):
+        """Test compress_multiple with password."""
+        from rustyzipper.compat import pyminizip
+
+        # Create test files
+        file1 = os.path.join(temp_dir, "secret1.txt")
+        file2 = os.path.join(temp_dir, "secret2.txt")
+        with open(file1, "w") as f:
+            f.write("Secret content 1")
+        with open(file2, "w") as f:
+            f.write("Secret content 2")
+
+        output = os.path.join(temp_dir, "secure.zip")
+        password = "mypassword123"
+
+        pyminizip.compress_multiple(
+            [file1, file2],
+            [],
+            output,
+            password,
+            5,
+        )
+
+        assert os.path.exists(output)
+
+        # Verify by extracting with password
+        extract_dir = os.path.join(temp_dir, "extracted")
+        decompress_file(output, extract_dir, password=password)
+        assert os.path.exists(os.path.join(extract_dir, "secret1.txt"))
+
+    def test_compress_multiple_with_prefixes(self, temp_dir):
+        """Test compress_multiple with prefix paths."""
+        from rustyzipper.compat import pyminizip
+
+        # Create test files
+        file1 = os.path.join(temp_dir, "doc1.txt")
+        file2 = os.path.join(temp_dir, "doc2.txt")
+        with open(file1, "w") as f:
+            f.write("Document 1")
+        with open(file2, "w") as f:
+            f.write("Document 2")
+
+        output = os.path.join(temp_dir, "prefixed.zip")
+
+        pyminizip.compress_multiple(
+            [file1, file2],
+            ["path1", "path2"],
+            output,
+            None,
+            5,
+        )
+
+        assert os.path.exists(output)
+
+        # Verify prefixes by extracting
+        extract_dir = os.path.join(temp_dir, "extracted")
+        decompress_file(output, extract_dir)
+        assert os.path.exists(os.path.join(extract_dir, "path1", "doc1.txt"))
+        assert os.path.exists(os.path.join(extract_dir, "path2", "doc2.txt"))
+
+    def test_compress_multiple_with_progress_callback(self, temp_dir):
+        """Test compress_multiple with progress callback."""
+        from rustyzipper.compat import pyminizip
+
+        # Create test files
+        files = []
+        for i in range(3):
+            path = os.path.join(temp_dir, f"file{i}.txt")
+            with open(path, "w") as f:
+                f.write(f"Content {i}")
+            files.append(path)
+
+        output = os.path.join(temp_dir, "progress.zip")
+
+        # Track progress callback calls
+        progress_calls = []
+
+        def on_progress(count):
+            progress_calls.append(count)
+
+        pyminizip.compress_multiple(
+            files,
+            [],
+            output,
+            None,
+            5,
+            on_progress,
+        )
+
+        assert os.path.exists(output)
+        # Progress callback should be called with total count
+        assert len(progress_calls) == 1
+        assert progress_calls[0] == 3
+
+    def test_compress_multiple_progress_callback_with_password(self, temp_dir):
+        """Test compress_multiple with both password and progress callback."""
+        from rustyzipper.compat import pyminizip
+
+        # Create test files
+        file1 = os.path.join(temp_dir, "a.txt")
+        file2 = os.path.join(temp_dir, "b.txt")
+        with open(file1, "w") as f:
+            f.write("File A")
+        with open(file2, "w") as f:
+            f.write("File B")
+
+        output = os.path.join(temp_dir, "secure_progress.zip")
+        password = "secretpass"
+
+        progress_count = []
+        pyminizip.compress_multiple(
+            [file1, file2],
+            [],
+            output,
+            password,
+            5,
+            lambda count: progress_count.append(count),
+        )
+
+        assert os.path.exists(output)
+        assert progress_count == [2]
+
+        # Verify extraction works
+        extract_dir = os.path.join(temp_dir, "extracted")
+        decompress_file(output, extract_dir, password=password)
+        assert os.path.exists(os.path.join(extract_dir, "a.txt"))
+
+    def test_compress_multiple_no_progress_callback(self, temp_dir):
+        """Test compress_multiple with progress=None (default)."""
+        from rustyzipper.compat import pyminizip
+
+        file1 = os.path.join(temp_dir, "test.txt")
+        with open(file1, "w") as f:
+            f.write("Test content")
+
+        output = os.path.join(temp_dir, "no_progress.zip")
+
+        # Should work without progress callback
+        pyminizip.compress_multiple(
+            [file1],
+            [],
+            output,
+            None,
+            5,
+            None,
+        )
+
+        assert os.path.exists(output)
+
+    def test_compress_multiple_different_compression_levels(self, temp_dir):
+        """Test compress_multiple with different compression levels."""
+        from rustyzipper.compat import pyminizip
+
+        file1 = os.path.join(temp_dir, "data.txt")
+        # Create compressible content
+        with open(file1, "w") as f:
+            f.write("AAAA" * 1000)
+
+        sizes = {}
+        for level in [1, 5, 9]:
+            output = os.path.join(temp_dir, f"level{level}.zip")
+            pyminizip.compress_multiple([file1], [], output, None, level)
+            sizes[level] = os.path.getsize(output)
+
+        # Higher compression levels should produce smaller (or equal) files
+        assert sizes[9] <= sizes[1]
+
+    def test_compress_multiple_empty_prefix_in_list(self, temp_dir):
+        """Test compress_multiple with empty strings in prefix list."""
+        from rustyzipper.compat import pyminizip
+
+        file1 = os.path.join(temp_dir, "file1.txt")
+        file2 = os.path.join(temp_dir, "file2.txt")
+        with open(file1, "w") as f:
+            f.write("Content 1")
+        with open(file2, "w") as f:
+            f.write("Content 2")
+
+        output = os.path.join(temp_dir, "mixed_prefix.zip")
+
+        # Mix of empty and non-empty prefixes
+        pyminizip.compress_multiple(
+            [file1, file2],
+            ["", "subdir"],
+            output,
+            None,
+            5,
+        )
+
+        assert os.path.exists(output)
+
+        # Verify extraction
+        extract_dir = os.path.join(temp_dir, "extracted")
+        decompress_file(output, extract_dir)
+        assert os.path.exists(os.path.join(extract_dir, "file1.txt"))
+        assert os.path.exists(os.path.join(extract_dir, "subdir", "file2.txt"))
