@@ -20,6 +20,10 @@ pub enum RustyZipError {
     #[error("File not found: {0}")]
     FileNotFound(String),
 
+    /// Invalid path error with descriptive context
+    /// Error messages should include:
+    /// - The problematic path
+    /// - The reason (UTF-8 encoding, illegal characters, missing filename, etc.)
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
@@ -28,6 +32,15 @@ pub enum RustyZipError {
 
     #[error("Walk directory error: {0}")]
     WalkDirError(#[from] walkdir::Error),
+
+    #[error("Path traversal attempt detected: {0}")]
+    PathTraversal(String),
+
+    #[error("ZIP bomb detected: decompressed size ({0} bytes) exceeds limit ({1} bytes)")]
+    ZipBomb(u64, u64),
+
+    #[error("Suspicious compression ratio detected: {0}x (limit: {1}x)")]
+    SuspiciousCompressionRatio(u64, u64),
 }
 
 impl From<RustyZipError> for PyErr {
@@ -41,6 +54,9 @@ impl From<RustyZipError> for PyErr {
             RustyZipError::InvalidPath(_) => PyValueError::new_err(err.to_string()),
             RustyZipError::PatternError(_) => PyValueError::new_err(err.to_string()),
             RustyZipError::WalkDirError(_) => PyIOError::new_err(err.to_string()),
+            RustyZipError::PathTraversal(_) => PyValueError::new_err(err.to_string()),
+            RustyZipError::ZipBomb(_, _) => PyValueError::new_err(err.to_string()),
+            RustyZipError::SuspiciousCompressionRatio(_, _) => PyValueError::new_err(err.to_string()),
         }
     }
 }

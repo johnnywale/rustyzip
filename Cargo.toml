@@ -27,15 +27,22 @@ time = "0.3"
 # Error handling
 thiserror = "2"
 
+# Logging
+log = "0.4"
+
 # Directory traversal
 walkdir = "2"
 
 # Glob pattern matching
 glob = "0.3"
 
+# Parallel processing (optional)
+rayon = { version = "1.10", optional = true }
+
 
 [features]
-default = []
+default = ["parallel"]
+parallel = ["rayon"]
 win-arm64 = ["pyo3/generate-import-lib"]
 
 

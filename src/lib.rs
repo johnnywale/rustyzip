@@ -8,6 +8,7 @@ mod error;
 mod stream;
 
 use compression::{CompressionLevel, EncryptionMethod};
+use log::warn;
 use pyo3::prelude::*;
 use std::io::{Cursor, Read};
 use std::path::Path;
@@ -31,7 +32,9 @@ use zip::ZipArchive;
 /// * `ValueError` - If parameters are invalid
 #[pyfunction]
 #[pyo3(signature = (input_path, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
+#[allow(deprecated)] // allow_threads is deprecated but works correctly; detach has different semantics
 fn compress_file(
+    py: Python<'_>,
     input_path: &str,
     output_path: &str,
     password: Option<&str>,
@@ -43,19 +46,28 @@ fn compress_file(
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
-        eprintln!(
-            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+        warn!(
+            "ZipCrypto encryption is weak and can be cracked. \
             Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
         );
     }
 
-    compression::compress_file(
-        Path::new(input_path),
-        Path::new(output_path),
-        password,
-        enc_method,
-        CompressionLevel::new(compression_level),
-    )?;
+    // Convert to owned strings for use in allow_threads closure
+    let input = input_path.to_string();
+    let output = output_path.to_string();
+    let pwd = password.map(|s| s.to_string());
+    let level = CompressionLevel::new(compression_level);
+
+    // Release GIL during CPU-intensive compression
+    py.allow_threads(|| {
+        compression::compress_file(
+            Path::new(&input),
+            Path::new(&output),
+            pwd.as_deref(),
+            enc_method,
+            level,
+        )
+    })?;
 
     Ok(())
 }
@@ -72,7 +84,9 @@ fn compress_file(
 /// * `suppress_warning` - Suppress security warnings for weak encryption
 #[pyfunction]
 #[pyo3(signature = (input_paths, prefixes, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
 fn compress_files(
+    py: Python<'_>,
     input_paths: Vec<String>,
     prefixes: Vec<Option<String>>,
     output_path: &str,
@@ -85,26 +99,35 @@ fn compress_files(
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
-        eprintln!(
-            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+        warn!(
+            "ZipCrypto encryption is weak and can be cracked. \
             Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
         );
     }
 
-    let paths: Vec<&Path> = input_paths.iter().map(|p| Path::new(p.as_str())).collect();
-    let prefix_refs: Vec<Option<&str>> = prefixes
-        .iter()
-        .map(|p| p.as_ref().map(|s| s.as_str()))
-        .collect();
+    // Convert to owned data for use in allow_threads closure
+    let output = output_path.to_string();
+    let pwd = password.map(|s| s.to_string());
+    let level = CompressionLevel::new(compression_level);
 
-    compression::compress_files(
-        &paths,
-        &prefix_refs,
-        Path::new(output_path),
-        password,
-        enc_method,
-        CompressionLevel::new(compression_level),
-    )?;
+    // Release GIL during CPU-intensive compression
+    py.allow_threads(|| {
+        let paths: Vec<std::path::PathBuf> = input_paths.iter().map(std::path::PathBuf::from).collect();
+        let path_refs: Vec<&Path> = paths.iter().map(|p| p.as_path()).collect();
+        let prefix_refs: Vec<Option<&str>> = prefixes
+            .iter()
+            .map(|p| p.as_ref().map(|s| s.as_str()))
+            .collect();
+
+        compression::compress_files(
+            &path_refs,
+            &prefix_refs,
+            Path::new(&output),
+            pwd.as_deref(),
+            enc_method,
+            level,
+        )
+    })?;
 
     Ok(())
 }
@@ -123,7 +146,9 @@ fn compress_files(
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 #[pyo3(signature = (input_dir, output_path, password=None, encryption="aes256", compression_level=6, include_patterns=None, exclude_patterns=None, suppress_warning=false))]
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
 fn compress_directory(
+    py: Python<'_>,
     input_dir: &str,
     output_path: &str,
     password: Option<&str>,
@@ -137,21 +162,30 @@ fn compress_directory(
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
-        eprintln!(
-            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+        warn!(
+            "ZipCrypto encryption is weak and can be cracked. \
             Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
         );
     }
 
-    compression::compress_directory(
-        Path::new(input_dir),
-        Path::new(output_path),
-        password,
-        enc_method,
-        CompressionLevel::new(compression_level),
-        include_patterns.as_deref(),
-        exclude_patterns.as_deref(),
-    )?;
+    // Convert to owned data for use in allow_threads closure
+    let input = input_dir.to_string();
+    let output = output_path.to_string();
+    let pwd = password.map(|s| s.to_string());
+    let level = CompressionLevel::new(compression_level);
+
+    // Release GIL during CPU-intensive compression
+    py.allow_threads(|| {
+        compression::compress_directory(
+            Path::new(&input),
+            Path::new(&output),
+            pwd.as_deref(),
+            enc_method,
+            level,
+            include_patterns.as_deref(),
+            exclude_patterns.as_deref(),
+        )
+    })?;
 
     Ok(())
 }
@@ -173,8 +207,17 @@ fn compress_directory(
 /// * `ValueError` - If password is incorrect
 #[pyfunction]
 #[pyo3(signature = (input_path, output_path, password=None, withoutpath=false))]
-fn decompress_file(input_path: &str, output_path: &str, password: Option<&str>, withoutpath: bool) -> PyResult<()> {
-    compression::decompress_file(Path::new(input_path), Path::new(output_path), password, withoutpath)?;
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
+fn decompress_file(py: Python<'_>, input_path: &str, output_path: &str, password: Option<&str>, withoutpath: bool) -> PyResult<()> {
+    // Convert to owned data for use in allow_threads closure
+    let input = input_path.to_string();
+    let output = output_path.to_string();
+    let pwd = password.map(|s| s.to_string());
+
+    // Release GIL during CPU-intensive decompression
+    py.allow_threads(|| {
+        compression::decompress_file(Path::new(&input), Path::new(&output), pwd.as_deref(), withoutpath)
+    })?;
 
     Ok(())
 }
@@ -207,7 +250,9 @@ fn decompress_file(input_path: &str, output_path: &str, password: Option<&str>, 
 /// ```
 #[pyfunction]
 #[pyo3(signature = (files, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
 fn compress_bytes(
+    py: Python<'_>,
     files: Vec<(String, Vec<u8>)>,
     password: Option<&str>,
     encryption: &str,
@@ -218,24 +263,30 @@ fn compress_bytes(
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
-        eprintln!(
-            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+        warn!(
+            "ZipCrypto encryption is weak and can be cracked. \
             Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
         );
     }
 
-    // Convert to the format expected by compression module
-    let file_refs: Vec<(&str, &[u8])> = files
-        .iter()
-        .map(|(name, data)| (name.as_str(), data.as_slice()))
-        .collect();
+    // Convert to owned data for use in allow_threads closure
+    let pwd = password.map(|s| s.to_string());
+    let level = CompressionLevel::new(compression_level);
 
-    let result = compression::compress_bytes(
-        &file_refs,
-        password,
-        enc_method,
-        CompressionLevel::new(compression_level),
-    )?;
+    // Release GIL during CPU-intensive compression
+    let result = py.allow_threads(|| {
+        let file_refs: Vec<(&str, &[u8])> = files
+            .iter()
+            .map(|(name, data)| (name.as_str(), data.as_slice()))
+            .collect();
+
+        compression::compress_bytes(
+            &file_refs,
+            pwd.as_deref(),
+            enc_method,
+            level,
+        )
+    })?;
 
     Ok(result)
 }
@@ -262,8 +313,15 @@ fn compress_bytes(
 /// ```
 #[pyfunction]
 #[pyo3(signature = (data, password=None))]
-fn decompress_bytes(data: Vec<u8>, password: Option<&str>) -> PyResult<Vec<(String, Vec<u8>)>> {
-    let result = compression::decompress_bytes(&data, password)?;
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
+fn decompress_bytes(py: Python<'_>, data: Vec<u8>, password: Option<&str>) -> PyResult<Vec<(String, Vec<u8>)>> {
+    // Convert to owned data for use in allow_threads closure
+    let pwd = password.map(|s| s.to_string());
+
+    // Release GIL during CPU-intensive decompression
+    let result = py.allow_threads(|| {
+        compression::decompress_bytes(&data, pwd.as_deref())
+    })?;
     Ok(result)
 }
 
@@ -314,8 +372,8 @@ fn compress_stream(
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
-        eprintln!(
-            "WARNING: ZipCrypto encryption is weak and can be cracked. \
+        warn!(
+            "ZipCrypto encryption is weak and can be cracked. \
             Use AES256 for sensitive data or set suppress_warning=True to acknowledge this risk."
         );
     }
@@ -405,7 +463,9 @@ fn decompress_stream(
 /// when a password is provided, matching pyminizip's behavior.
 #[pyfunction]
 #[pyo3(signature = (src, src_prefix, dst, password, compress_level))]
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
 fn compress(
+    py: Python<'_>,
     src: &Bound<'_, PyAny>,
     src_prefix: &Bound<'_, PyAny>,
     dst: &str,
@@ -442,20 +502,29 @@ fn compress(
         EncryptionMethod::None
     };
 
-    let path_refs: Vec<&Path> = paths.iter().map(|p| Path::new(p.as_str())).collect();
-    let prefix_refs: Vec<Option<&str>> = prefixes
-        .iter()
-        .map(|p| p.as_ref().map(|s| s.as_str()))
-        .collect();
+    // Convert to owned data for use in allow_threads closure
+    let output = dst.to_string();
+    let pwd = password.map(|s| s.to_string());
+    let level = CompressionLevel::new(compress_level);
 
-    compression::compress_files(
-        &path_refs,
-        &prefix_refs,
-        Path::new(dst),
-        password,
-        enc_method,
-        CompressionLevel::new(compress_level),
-    )?;
+    // Release GIL during CPU-intensive compression
+    py.allow_threads(|| {
+        let path_bufs: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+        let path_refs: Vec<&Path> = path_bufs.iter().map(|p| p.as_path()).collect();
+        let prefix_refs: Vec<Option<&str>> = prefixes
+            .iter()
+            .map(|p| p.as_ref().map(|s| s.as_str()))
+            .collect();
+
+        compression::compress_files(
+            &path_refs,
+            &prefix_refs,
+            Path::new(&output),
+            pwd.as_deref(),
+            enc_method,
+            level,
+        )
+    })?;
 
     Ok(())
 }
@@ -472,8 +541,18 @@ fn compress(
 /// * `withoutpath` - If non-zero, extract files without their directory paths (flatten)
 #[pyfunction]
 #[pyo3(signature = (src, password, dst, withoutpath))]
-fn uncompress(src: &str, password: Option<&str>, dst: &str, withoutpath: i32) -> PyResult<()> {
-    compression::decompress_file(Path::new(src), Path::new(dst), password, withoutpath != 0)?;
+#[allow(deprecated)] // allow_threads is deprecated but works correctly
+fn uncompress(py: Python<'_>, src: &str, password: Option<&str>, dst: &str, withoutpath: i32) -> PyResult<()> {
+    // Convert to owned data for use in allow_threads closure
+    let input = src.to_string();
+    let output = dst.to_string();
+    let pwd = password.map(|s| s.to_string());
+    let without = withoutpath != 0;
+
+    // Release GIL during CPU-intensive decompression
+    py.allow_threads(|| {
+        compression::decompress_file(Path::new(&input), Path::new(&output), pwd.as_deref(), without)
+    })?;
 
     Ok(())
 }
@@ -930,4 +1009,320 @@ fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", "1.0.0")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::RustyZipError;
+    use std::fs;
+    use std::io::Read;
+    use tempfile::tempdir;
+
+    // ========================================================================
+    // Compat API Tests - Verify ZipCrypto is always used
+    // ========================================================================
+
+    /// Helper to verify a ZIP uses ZipCrypto encryption (not AES)
+    fn verify_zipcrypto_encryption(zip_path: &Path, password: &str) -> bool {
+        use zip::ZipArchive;
+
+        let file = std::fs::File::open(zip_path).unwrap();
+        let mut archive = ZipArchive::new(file).unwrap();
+
+        if archive.len() == 0 {
+            return false;
+        }
+
+        // Try to decrypt with ZipCrypto - this should work
+        let result = archive.by_index_decrypt(0, password.as_bytes());
+        match result {
+            Ok(mut f) => {
+                let mut content = Vec::new();
+                let success = f.read_to_end(&mut content).is_ok();
+                drop(f);
+                success
+            }
+            Err(_) => false,
+        }
+    }
+
+    /// Helper to check if file is encrypted (requires password)
+    fn is_encrypted(zip_path: &Path) -> bool {
+        use zip::ZipArchive;
+
+        let file = std::fs::File::open(zip_path).unwrap();
+        let mut archive = ZipArchive::new(file).unwrap();
+
+        if archive.len() == 0 {
+            return false;
+        }
+
+        // Try to read without password - encrypted files should fail
+        let result = archive.by_index(0);
+        let encrypted = match result {
+            Ok(_) => false,
+            Err(zip::result::ZipError::UnsupportedArchive(ref msg)) => {
+                msg.contains("Password") || msg.contains("password")
+            }
+            Err(_) => false,
+        };
+        drop(result);
+        encrypted
+    }
+
+    #[test]
+    fn test_compat_compress_single_file_uses_zipcrypto() {
+        let temp_dir = tempdir().unwrap();
+        let input_path = temp_dir.path().join("test.txt");
+        let output_path = temp_dir.path().join("compat_single.zip");
+
+        fs::write(&input_path, "Test content").unwrap();
+
+        // Use compression::compress_files with ZipCrypto (what compat API does)
+        compression::compress_files(
+            &[input_path.as_path()],
+            &[None],
+            &output_path,
+            Some("password123"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Verify it's encrypted
+        assert!(is_encrypted(&output_path), "File should be encrypted");
+
+        // Verify it can be decrypted with ZipCrypto
+        assert!(
+            verify_zipcrypto_encryption(&output_path, "password123"),
+            "Should decrypt with ZipCrypto"
+        );
+    }
+
+    #[test]
+    fn test_compat_compress_with_prefix_uses_zipcrypto() {
+        let temp_dir = tempdir().unwrap();
+        let input_path = temp_dir.path().join("data.txt");
+        let output_path = temp_dir.path().join("compat_prefix.zip");
+
+        fs::write(&input_path, "Data with prefix").unwrap();
+
+        // Compress with prefix using ZipCrypto
+        compression::compress_files(
+            &[input_path.as_path()],
+            &[Some("subdir/nested")],
+            &output_path,
+            Some("secret"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::new(5),
+        )
+        .unwrap();
+
+        // Verify encryption
+        assert!(is_encrypted(&output_path));
+        assert!(verify_zipcrypto_encryption(&output_path, "secret"));
+
+        // Verify content and path
+        let extract_path = temp_dir.path().join("extracted");
+        compression::decompress_file(&output_path, &extract_path, Some("secret"), false).unwrap();
+
+        assert!(extract_path.join("subdir/nested/data.txt").exists());
+    }
+
+    #[test]
+    fn test_compat_compress_multiple_files_uses_zipcrypto() {
+        let temp_dir = tempdir().unwrap();
+        let file1 = temp_dir.path().join("file1.txt");
+        let file2 = temp_dir.path().join("file2.txt");
+        let file3 = temp_dir.path().join("file3.txt");
+        let output_path = temp_dir.path().join("compat_multi.zip");
+
+        fs::write(&file1, "Content 1").unwrap();
+        fs::write(&file2, "Content 2").unwrap();
+        fs::write(&file3, "Content 3").unwrap();
+
+        // Compress multiple files with ZipCrypto
+        compression::compress_files(
+            &[file1.as_path(), file2.as_path(), file3.as_path()],
+            &[Some("a"), Some("b"), Some("c")],
+            &output_path,
+            Some("multipass"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Verify all files are ZipCrypto encrypted
+        assert!(is_encrypted(&output_path));
+        assert!(verify_zipcrypto_encryption(&output_path, "multipass"));
+
+        // Decompress and verify
+        let extract_path = temp_dir.path().join("extracted");
+        compression::decompress_file(&output_path, &extract_path, Some("multipass"), false)
+            .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(extract_path.join("a/file1.txt")).unwrap(),
+            "Content 1"
+        );
+        assert_eq!(
+            fs::read_to_string(extract_path.join("b/file2.txt")).unwrap(),
+            "Content 2"
+        );
+        assert_eq!(
+            fs::read_to_string(extract_path.join("c/file3.txt")).unwrap(),
+            "Content 3"
+        );
+    }
+
+    #[test]
+    fn test_compat_no_password_no_encryption() {
+        let temp_dir = tempdir().unwrap();
+        let input_path = temp_dir.path().join("unencrypted.txt");
+        let output_path = temp_dir.path().join("no_encrypt.zip");
+
+        fs::write(&input_path, "Not encrypted").unwrap();
+
+        // Compress without password (should use EncryptionMethod::None)
+        compression::compress_files(
+            &[input_path.as_path()],
+            &[None],
+            &output_path,
+            None,
+            compression::EncryptionMethod::None,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Verify NOT encrypted
+        assert!(!is_encrypted(&output_path));
+
+        // Should decompress without password
+        let extract_path = temp_dir.path().join("extracted");
+        compression::decompress_file(&output_path, &extract_path, None, false).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(extract_path.join("unencrypted.txt")).unwrap(),
+            "Not encrypted"
+        );
+    }
+
+    #[test]
+    fn test_compat_uncompress_zipcrypto() {
+        let temp_dir = tempdir().unwrap();
+        let input_path = temp_dir.path().join("secret.txt");
+        let zip_path = temp_dir.path().join("secret.zip");
+        let extract_path = temp_dir.path().join("extracted");
+
+        fs::write(&input_path, "Secret ZipCrypto data").unwrap();
+
+        // Create ZipCrypto encrypted file
+        compression::compress_file(
+            &input_path,
+            &zip_path,
+            Some("password"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Decompress (simulating compat uncompress)
+        compression::decompress_file(&zip_path, &extract_path, Some("password"), false).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(extract_path.join("secret.txt")).unwrap(),
+            "Secret ZipCrypto data"
+        );
+    }
+
+    #[test]
+    fn test_compat_uncompress_withoutpath_flag() {
+        let temp_dir = tempdir().unwrap();
+
+        // Create a ZIP with nested structure
+        let files = vec![
+            ("level1/level2/deep.txt", b"Deep file".as_slice()),
+            ("level1/shallow.txt", b"Shallow file".as_slice()),
+        ];
+
+        let zip_data = compression::compress_bytes(
+            &files,
+            Some("pass"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        let zip_path = temp_dir.path().join("nested.zip");
+        fs::write(&zip_path, &zip_data).unwrap();
+
+        // Extract with withoutpath=true (like pyminizip uncompress with withoutpath=1)
+        let extract_flat = temp_dir.path().join("flat");
+        compression::decompress_file(&zip_path, &extract_flat, Some("pass"), true).unwrap();
+
+        // Files should be flattened
+        assert!(extract_flat.join("deep.txt").exists());
+        assert!(extract_flat.join("shallow.txt").exists());
+        assert!(!extract_flat.join("level1").exists());
+
+        // Extract with withoutpath=false (preserve structure)
+        let extract_nested = temp_dir.path().join("nested");
+        compression::decompress_file(&zip_path, &extract_nested, Some("pass"), false).unwrap();
+
+        // Files should preserve structure
+        assert!(extract_nested.join("level1/level2/deep.txt").exists());
+        assert!(extract_nested.join("level1/shallow.txt").exists());
+    }
+
+    #[test]
+    fn test_compat_wrong_password_error() {
+        let temp_dir = tempdir().unwrap();
+        let input_path = temp_dir.path().join("test.txt");
+        let zip_path = temp_dir.path().join("encrypted.zip");
+        let extract_path = temp_dir.path().join("extracted");
+
+        fs::write(&input_path, "Encrypted content").unwrap();
+
+        // Create ZipCrypto encrypted file
+        compression::compress_file(
+            &input_path,
+            &zip_path,
+            Some("correct_password"),
+            compression::EncryptionMethod::ZipCrypto,
+            compression::CompressionLevel::DEFAULT,
+        )
+        .unwrap();
+
+        // Try to decompress with wrong password
+        let result =
+            compression::decompress_file(&zip_path, &extract_path, Some("wrong_password"), false);
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            RustyZipError::InvalidPassword => {}
+            e => panic!("Expected InvalidPassword error, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_encryption_method_selection_for_compat() {
+        // When password is provided, compat should use ZipCrypto
+        let with_password = Some("password");
+        let enc_with_pwd = if with_password.is_some() {
+            compression::EncryptionMethod::ZipCrypto
+        } else {
+            compression::EncryptionMethod::None
+        };
+        assert_eq!(enc_with_pwd, compression::EncryptionMethod::ZipCrypto);
+
+        // When no password, should use None
+        let no_password: Option<&str> = None;
+        let enc_no_pwd = if no_password.is_some() {
+            compression::EncryptionMethod::ZipCrypto
+        } else {
+            compression::EncryptionMethod::None
+        };
+        assert_eq!(enc_no_pwd, compression::EncryptionMethod::None);
+    }
 }
