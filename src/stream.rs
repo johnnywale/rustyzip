@@ -43,7 +43,24 @@ impl Read for PyReader<'_> {
             .call_method1("read", (read_size,))
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-        // Convert result to bytes - extract as Vec<u8> directly
+        // Try to cast to PyBytes first for zero-copy access
+        #[allow(deprecated)] // downcast is deprecated but cast() has different semantics
+        if let Ok(py_bytes) = result.downcast::<PyBytes>() {
+            let bytes = py_bytes.as_bytes();
+            let bytes_read = bytes.len();
+
+            if bytes_read > buf.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Python read returned more bytes than requested",
+                ));
+            }
+
+            buf[..bytes_read].copy_from_slice(bytes);
+            return Ok(bytes_read);
+        }
+
+        // Fallback: extract as Vec<u8> (for memoryview or other types)
         let bytes: Vec<u8> = result
             .extract()
             .map_err(|e: pyo3::PyErr| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
