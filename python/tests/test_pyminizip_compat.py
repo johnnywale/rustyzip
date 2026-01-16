@@ -638,3 +638,248 @@ class TestWithoutpathBehavior:
             # Should be flattened
             assert os.path.exists(os.path.join(extract_dir, "test.txt"))
             assert not os.path.exists(os.path.join(extract_dir, "dir"))
+
+
+class TestSecurityParameters:
+    """Tests for security parameters in compat API (max_size, max_ratio, allow_symlinks)."""
+
+    def test_uncompress_default_security_limits(self, temp_dir, sample_file):
+        """Test that default security limits are applied (2GB size, 500:1 ratio)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, "password", 5)
+
+        # Should work with default limits for normal files
+        pyminizip.uncompress(zip_file, "password", extract_dir, 0)
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_custom_max_size(self, temp_dir, sample_file):
+        """Test uncompress with custom max_size parameter."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Use a large custom max_size
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            max_size=10 * 1024 * 1024 * 1024  # 10GB
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_disabled_max_size(self, temp_dir, sample_file):
+        """Test uncompress with max_size=0 (disabled)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Disable size limit
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            max_size=0
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_custom_max_ratio(self, temp_dir, sample_file):
+        """Test uncompress with custom max_ratio parameter."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Use a higher ratio limit
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            max_ratio=1000
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_disabled_max_ratio(self, temp_dir, sample_file):
+        """Test uncompress with max_ratio=0 (disabled)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Disable ratio limit
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            max_ratio=0
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_both_limits_custom(self, temp_dir, sample_file):
+        """Test uncompress with both max_size and max_ratio customized."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, "pass123", 5)
+
+        pyminizip.uncompress(
+            zip_file, "pass123", extract_dir, 0,
+            max_size=5 * 1024 * 1024 * 1024,  # 5GB
+            max_ratio=2000
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_both_limits_disabled(self, temp_dir, sample_file):
+        """Test uncompress with both limits disabled (permissive mode)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Fully permissive mode
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            max_size=0,
+            max_ratio=0
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_allow_symlinks_false(self, temp_dir, sample_file):
+        """Test uncompress with allow_symlinks=False (default behavior)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 0,
+            allow_symlinks=False
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_with_password_and_security_params(self, temp_dir, sample_file):
+        """Test uncompress combining password and security parameters."""
+        zip_file = os.path.join(temp_dir, "secure.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "SecureP@ssw0rd"
+
+        pyminizip.compress(sample_file, None, zip_file, password, 5)
+
+        pyminizip.uncompress(
+            zip_file, password, extract_dir, 0,
+            max_size=1024 * 1024 * 1024,
+            max_ratio=500,
+            allow_symlinks=False
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_with_prefix_and_security_params(self, temp_dir, sample_file):
+        """Test uncompress with archive prefix and security parameters."""
+        zip_file = os.path.join(temp_dir, "prefixed.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        # Compress with prefix
+        pyminizip.compress(sample_file, "subdir/nested", zip_file, "pass", 5)
+
+        pyminizip.uncompress(
+            zip_file, "pass", extract_dir, 0,
+            max_size=0,  # Disabled
+            max_ratio=0  # Disabled
+        )
+
+        # Should preserve directory structure
+        assert os.path.exists(os.path.join(extract_dir, "subdir", "nested", "sample.txt"))
+
+    def test_uncompress_withoutpath_and_security_params(self, temp_dir, sample_file):
+        """Test uncompress with withoutpath=1 and security parameters."""
+        zip_file = os.path.join(temp_dir, "nested.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        # Compress with prefix
+        pyminizip.compress(sample_file, "deep/path/here", zip_file, None, 5)
+
+        # Extract flattened with custom security
+        pyminizip.uncompress(
+            zip_file, None, extract_dir, 1,  # withoutpath=1
+            max_size=10 * 1024 * 1024 * 1024,
+            max_ratio=1000
+        )
+
+        # Should be flattened
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+        assert not os.path.exists(os.path.join(extract_dir, "deep"))
+
+    def test_uncompress_security_params_keyword_only(self, temp_dir, sample_file):
+        """Test that security parameters must be keyword arguments."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, None, 5)
+
+        # Passing max_size as positional should raise TypeError
+        with pytest.raises(TypeError):
+            pyminizip.uncompress(zip_file, None, extract_dir, 0, 1024)
+
+    def test_uncompress_backward_compatibility(self, temp_dir, sample_file):
+        """Test that existing code without security params still works."""
+        zip_file = os.path.join(temp_dir, "legacy.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(sample_file, None, zip_file, "oldpass", 5)
+
+        # Old-style call without any security params
+        pyminizip.uncompress(zip_file, "oldpass", extract_dir, 0)
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_uncompress_large_file_with_limits(self, temp_dir):
+        """Test uncompress of larger file with security limits."""
+        # Create a larger file (100KB of compressible data)
+        large_file = os.path.join(temp_dir, "large.txt")
+        with open(large_file, 'w') as f:
+            f.write("ABCD" * 25000)  # 100KB
+
+        zip_file = os.path.join(temp_dir, "large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(large_file, None, zip_file, "largepass", 9)
+
+        # Should work with default limits
+        pyminizip.uncompress(
+            zip_file, "largepass", extract_dir, 0,
+            max_size=1024 * 1024 * 1024,  # 1GB
+            max_ratio=1000
+        )
+
+        extracted = os.path.join(extract_dir, "large.txt")
+        assert os.path.exists(extracted)
+        assert os.path.getsize(extracted) == 100000
+
+    def test_uncompress_multiple_files_with_security(self, temp_dir):
+        """Test uncompress of multiple files with security parameters."""
+        # Create multiple files
+        files = []
+        for i in range(3):
+            path = os.path.join(temp_dir, f"file{i}.txt")
+            with open(path, 'w') as f:
+                f.write(f"Content of file {i}")
+            files.append(path)
+
+        zip_file = os.path.join(temp_dir, "multi.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        pyminizip.compress(files, [None, None, None], zip_file, "multipass", 5)
+
+        pyminizip.uncompress(
+            zip_file, "multipass", extract_dir, 0,
+            max_size=0,
+            max_ratio=0,
+            allow_symlinks=False
+        )
+
+        for i in range(3):
+            assert os.path.exists(os.path.join(extract_dir, f"file{i}.txt"))
