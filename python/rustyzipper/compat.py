@@ -16,10 +16,29 @@ Usage:
     pyminizip.compress_multiple(["file1.txt", "file2.txt"], [], "output.zip", "password", 5, progress_callback)
     pyminizip.uncompress("output.zip", "password", "extracted/", 0)
 
+Security Features:
+    Unlike pyminizip, this module includes built-in protection against ZIP bombs
+    and path traversal attacks. The uncompress() function supports optional
+    security parameters:
+
+    # Disable size limit for large archives
+    pyminizip.uncompress("large.zip", "password", "extracted/", 0, max_size=0)
+
+    # Custom limits
+    pyminizip.uncompress("archive.zip", "password", "extracted/", 0,
+                        max_size=10*1024*1024*1024,  # 10GB
+                        max_ratio=1000)              # Allow 1000:1 ratio
+
+    Default protections:
+    - Maximum decompressed size: 2 GB
+    - Maximum compression ratio: 500:1
+    - Path traversal: Always blocked
+    - Symlinks: Blocked by default
+
 Note:
     For pyminizip compatibility, this module uses ZipCrypto encryption by default
     when a password is provided, matching pyminizip's behavior. For better security,
-    consider using the modern rustyzip API with AES256 encryption.
+    consider using the modern rustyzipper API with AES256 encryption.
 """
 
 from typing import Callable, List, Optional, Union
@@ -124,10 +143,15 @@ class _PyminizipCompat:
         password: Optional[str],
         dst: Optional[str],
         withoutpath: int,
+        *,
+        max_size: Optional[int] = None,
+        max_ratio: Optional[int] = None,
+        allow_symlinks: bool = False,
     ) -> None:
-        """Extract a ZIP archive.
+        """Extract a ZIP archive with optional security settings.
 
-        This function provides API compatibility with pyminizip.uncompress().
+        This function provides API compatibility with pyminizip.uncompress(),
+        with additional security parameters for ZIP bomb protection.
 
         Args:
             src: Source ZIP file path.
@@ -135,6 +159,11 @@ class _PyminizipCompat:
             dst: Destination directory path, or None to extract to current working directory.
             withoutpath: If non-zero, extract files without their directory paths
                         (flatten all files into the destination directory).
+            max_size: Maximum total decompressed size in bytes. Default is 2GB.
+                     Set to 0 to disable size checking.
+            max_ratio: Maximum compression ratio allowed. Default is 500.
+                      Set to 0 to disable ratio checking.
+            allow_symlinks: Whether to allow extracting symbolic links. Default is False.
 
         Returns:
             Always returns None.
@@ -142,14 +171,26 @@ class _PyminizipCompat:
         Raises:
             IOError: If file operations fail.
             ValueError: If password is incorrect.
+            RustyZipError: If ZIP bomb limits are exceeded.
 
         Example:
+            >>> # Basic usage (protected by secure defaults)
             >>> pyminizip.uncompress("archive.zip", "password", "extracted/", 0)
+
+            >>> # Disable size limit for large archives
+            >>> pyminizip.uncompress("large.zip", "password", "extracted/", 0, max_size=0)
+
+            >>> # Custom limits
+            >>> pyminizip.uncompress("archive.zip", "password", "extracted/", 0,
+            ...                      max_size=10*1024*1024*1024,  # 10GB
+            ...                      max_ratio=1000)
         """
         import os
         # Use current working directory if dst is None
         extract_dir = dst if dst is not None else os.getcwd()
-        _rust.uncompress(src, password, extract_dir, withoutpath)
+        _rust.uncompress(src, password, extract_dir, withoutpath,
+                        max_size=max_size, max_ratio=max_ratio,
+                        allow_symlinks=allow_symlinks)
 
 
 # Create a module-like object for compatibility

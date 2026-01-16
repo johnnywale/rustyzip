@@ -37,7 +37,7 @@ pip install rustyzipper
 ### Modern API (Recommended)
 
 ```python
-from rustyzipper import compress_file, decompress_file, EncryptionMethod
+from rustyzipper import compress_file, decompress_file, EncryptionMethod, SecurityPolicy
 
 # Secure compression with AES-256 (recommended for sensitive data)
 compress_file("document.pdf", "secure.zip", password="MySecureP@ssw0rd")
@@ -51,8 +51,15 @@ compress_file(
     suppress_warning=True
 )
 
-# Decompress
+# Decompress with default security (protected against ZIP bombs)
 decompress_file("secure.zip", "extracted/", password="MySecureP@ssw0rd")
+
+# Decompress with custom security policy
+policy = SecurityPolicy(max_size="10GB", max_ratio=1000)
+decompress_file("large.zip", "extracted/", policy=policy)
+
+# Decompress with unlimited policy (for trusted archives only)
+decompress_file("trusted.zip", "out/", policy=SecurityPolicy.unlimited())
 ```
 
 ### pyminizip Compatibility (No Code Changes Required)
@@ -138,8 +145,26 @@ compress_directory(
 decompress_file(
     input_path: str,
     output_path: str,
-    password: str | None = None
+    password: str | None = None,
+    *,
+    policy: SecurityPolicy | None = None
 ) -> None
+```
+
+### SecurityPolicy
+
+```python
+# Create a policy with custom limits
+policy = SecurityPolicy(
+    max_size: int | str = None,    # e.g., "10GB", "500MB", or bytes
+    max_ratio: int = None,          # e.g., 1000 for 1000:1
+    allow_symlinks: bool = False
+)
+
+# Factory methods
+SecurityPolicy.unlimited()           # No limits (use with trusted archives only)
+SecurityPolicy.strict()              # 100MB max, 100:1 ratio (for untrusted content)
+SecurityPolicy.strict("50MB", 50)    # Custom strict limits
 ```
 
 ## Examples
@@ -370,6 +395,79 @@ with open("huge_archive.zip", "rb") as f:
         process_file(content)  # Only one file in memory at a time
 ```
 
+## Security Features
+
+rustyzipper is **secure by default** with built-in protection against common ZIP vulnerabilities.
+
+### Built-in Protections
+
+| Protection | Default | Description |
+|------------|---------|-------------|
+| **ZIP Bomb (Size)** | 2 GB max | Prevents extraction of archives that decompress to massive sizes |
+| **ZIP Bomb (Ratio)** | 500:1 max | Detects suspiciously high compression ratios |
+| **Path Traversal** | Always on | Blocks `../` attacks that could write outside target directory |
+| **Symlinks** | Blocked | Prevents symlink-based escape attacks |
+| **Memory Zeroization** | Active | Passwords are securely erased from memory after use |
+| **Thread Pool Capping** | Auto | Dedicated thread pool prevents CPU starvation |
+
+### Compat API Security Settings
+
+The `uncompress()` function supports optional security parameters while maintaining full backward compatibility:
+
+```python
+from rustyzipper.compat import pyminizip
+
+# Basic usage - protected by secure defaults (2GB/500:1 limits)
+pyminizip.uncompress("archive.zip", "password", "output/", 0)
+
+# Disable size limit for known-large archives
+pyminizip.uncompress("large.zip", "password", "output/", 0, max_size=0)
+
+# Custom limits for specific use cases
+pyminizip.uncompress(
+    "archive.zip",
+    "password",
+    "output/",
+    0,
+    max_size=10 * 1024 * 1024 * 1024,  # 10 GB
+    max_ratio=1000                      # Allow 1000:1 compression ratio
+)
+
+# Full parameter list
+pyminizip.uncompress(
+    src,           # Source ZIP path
+    password,      # Password (or None)
+    dst,           # Destination directory
+    withoutpath,   # 0=preserve paths, 1=flatten
+    max_size=None, # Max decompressed size in bytes (default: 2GB, 0=disable)
+    max_ratio=None,# Max compression ratio (default: 500, 0=disable)
+    allow_symlinks=False  # Allow symlink extraction (default: False)
+)
+```
+
+### Security Settings Summary
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_size` | 2 GB | Maximum total decompressed size. Set to `0` to disable. |
+| `max_ratio` | 500 | Maximum compression ratio. Set to `0` to disable. |
+| `allow_symlinks` | `False` | Whether to extract symbolic links (reserved for future use). |
+
+### Handling ZIP Bomb Errors
+
+```python
+from rustyzipper.compat import pyminizip
+from rustyzipper import RustyZipError
+
+try:
+    pyminizip.uncompress("suspicious.zip", None, "output/", 0)
+except RustyZipError as e:
+    if "ZipBomb" in str(e):
+        print("Archive exceeds safe decompression limits")
+    elif "SuspiciousCompressionRatio" in str(e):
+        print("Archive has suspiciously high compression ratio")
+```
+
 ## Security Guidelines
 
 ### DO:
@@ -377,12 +475,14 @@ with open("huge_archive.zip", "rb") as f:
 - Use strong passwords (12+ characters, mixed case, numbers, symbols)
 - Store passwords in a password manager
 - Use unique passwords for each archive
+- Keep default security limits unless you have a specific reason to change them
 
 ### DON'T:
 - Use ZipCrypto for sensitive data (it's weak!)
 - Use weak or common passwords
 - Share passwords via insecure channels
 - Reuse passwords across archives
+- Disable security limits (`max_size=0`) without understanding the risks
 
 ## Platform Support
 

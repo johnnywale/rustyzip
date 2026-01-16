@@ -22,6 +22,7 @@ from rustyzipper import (
     open_zip_stream_from_file,
     EncryptionMethod,
     CompressionLevel,
+    SecurityPolicy,
 )
 
 
@@ -1502,3 +1503,268 @@ class TestPyminizipCompatCompressMultiple:
         decompress_file(output, extract_dir)
         assert os.path.exists(os.path.join(extract_dir, "file1.txt"))
         assert os.path.exists(os.path.join(extract_dir, "subdir", "file2.txt"))
+
+
+# =============================================================================
+# SecurityPolicy Tests
+# =============================================================================
+
+
+class TestSecurityPolicy:
+    """Tests for the SecurityPolicy class."""
+
+    def test_default_policy(self):
+        """Test default SecurityPolicy has expected values."""
+        policy = SecurityPolicy()
+        assert policy.max_size is None  # Uses default (2GB)
+        assert policy.max_ratio is None  # Uses default (500)
+        assert policy.allow_symlinks is False
+
+    def test_custom_max_size_int(self):
+        """Test setting max_size with an integer."""
+        policy = SecurityPolicy(max_size=1024 * 1024 * 100)  # 100MB
+        assert policy.max_size == 104857600
+
+    def test_custom_max_size_string_mb(self):
+        """Test setting max_size with MB string."""
+        policy = SecurityPolicy(max_size="100MB")
+        assert policy.max_size == 100 * 1024 * 1024
+
+    def test_custom_max_size_string_gb(self):
+        """Test setting max_size with GB string."""
+        policy = SecurityPolicy(max_size="5GB")
+        assert policy.max_size == 5 * 1024 * 1024 * 1024
+
+    def test_custom_max_size_string_kb(self):
+        """Test setting max_size with KB string."""
+        policy = SecurityPolicy(max_size="500KB")
+        assert policy.max_size == 500 * 1024
+
+    def test_custom_max_size_string_tb(self):
+        """Test setting max_size with TB string."""
+        policy = SecurityPolicy(max_size="1TB")
+        assert policy.max_size == 1024 * 1024 * 1024 * 1024
+
+    def test_custom_max_size_with_space(self):
+        """Test setting max_size with space between number and unit."""
+        policy = SecurityPolicy(max_size="100 MB")
+        assert policy.max_size == 100 * 1024 * 1024
+
+    def test_custom_max_size_lowercase(self):
+        """Test setting max_size with lowercase unit."""
+        policy = SecurityPolicy(max_size="100mb")
+        assert policy.max_size == 100 * 1024 * 1024
+
+    def test_custom_max_size_decimal(self):
+        """Test setting max_size with decimal value."""
+        policy = SecurityPolicy(max_size="1.5GB")
+        assert policy.max_size == int(1.5 * 1024 * 1024 * 1024)
+
+    def test_custom_max_size_zero_disables(self):
+        """Test that max_size=0 disables the limit."""
+        policy = SecurityPolicy(max_size=0)
+        assert policy.max_size == 0
+
+    def test_custom_max_ratio(self):
+        """Test setting custom max_ratio."""
+        policy = SecurityPolicy(max_ratio=1000)
+        assert policy.max_ratio == 1000
+
+    def test_custom_max_ratio_zero_disables(self):
+        """Test that max_ratio=0 disables the limit."""
+        policy = SecurityPolicy(max_ratio=0)
+        assert policy.max_ratio == 0
+
+    def test_allow_symlinks(self):
+        """Test setting allow_symlinks."""
+        policy = SecurityPolicy(allow_symlinks=True)
+        assert policy.allow_symlinks is True
+
+    def test_unlimited_factory(self):
+        """Test SecurityPolicy.unlimited() factory method."""
+        policy = SecurityPolicy.unlimited()
+        assert policy.max_size == 0
+        assert policy.max_ratio == 0
+        assert policy.allow_symlinks is False
+
+    def test_strict_factory_defaults(self):
+        """Test SecurityPolicy.strict() factory method with defaults."""
+        policy = SecurityPolicy.strict()
+        assert policy.max_size == 100 * 1024 * 1024  # 100MB
+        assert policy.max_ratio == 100
+
+    def test_strict_factory_custom(self):
+        """Test SecurityPolicy.strict() with custom values."""
+        policy = SecurityPolicy.strict(max_size="50MB", max_ratio=50)
+        assert policy.max_size == 50 * 1024 * 1024
+        assert policy.max_ratio == 50
+
+    def test_repr(self):
+        """Test SecurityPolicy __repr__ method."""
+        policy = SecurityPolicy(max_size="1GB", max_ratio=200)
+        repr_str = repr(policy)
+        assert "SecurityPolicy" in repr_str
+        assert "1.0GB" in repr_str
+        assert "200:1" in repr_str
+
+    def test_repr_unlimited(self):
+        """Test __repr__ shows 'unlimited' for disabled limits."""
+        policy = SecurityPolicy.unlimited()
+        repr_str = repr(policy)
+        assert "unlimited" in repr_str
+
+    def test_repr_default(self):
+        """Test __repr__ shows 'default' for unset values."""
+        policy = SecurityPolicy()
+        repr_str = repr(policy)
+        assert "default" in repr_str
+
+    def test_invalid_size_format(self):
+        """Test that invalid size format raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid size format"):
+            SecurityPolicy(max_size="invalid")
+
+    def test_invalid_size_unit(self):
+        """Test that invalid size unit raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown size unit"):
+            SecurityPolicy(max_size="100XB")
+
+
+class TestDecompressFileWithPolicy:
+    """Tests for decompress_file with SecurityPolicy parameter."""
+
+    def test_decompress_with_default_policy(self, temp_dir, sample_file):
+        """Test decompress_file with default policy (no policy argument)."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        compress_file(sample_file, zip_file, encryption=EncryptionMethod.NONE)
+        decompress_file(zip_file, extract_dir)
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_decompress_with_unlimited_policy(self, temp_dir, sample_file):
+        """Test decompress_file with unlimited policy."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        compress_file(sample_file, zip_file, encryption=EncryptionMethod.NONE)
+        decompress_file(zip_file, extract_dir, policy=SecurityPolicy.unlimited())
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_decompress_with_custom_policy(self, temp_dir, sample_file):
+        """Test decompress_file with custom SecurityPolicy."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        compress_file(sample_file, zip_file, encryption=EncryptionMethod.NONE)
+        policy = SecurityPolicy(max_size="10GB", max_ratio=1000)
+        decompress_file(zip_file, extract_dir, policy=policy)
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_decompress_with_strict_policy(self, temp_dir, sample_file):
+        """Test decompress_file with strict policy."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        compress_file(sample_file, zip_file, encryption=EncryptionMethod.NONE)
+        decompress_file(zip_file, extract_dir, policy=SecurityPolicy.strict())
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+    def test_decompress_policy_with_password(self, temp_dir, sample_file):
+        """Test decompress_file with policy and password."""
+        zip_file = os.path.join(temp_dir, "test.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+
+        compress_file(sample_file, zip_file, password="secret")
+        decompress_file(
+            zip_file,
+            extract_dir,
+            password="secret",
+            policy=SecurityPolicy(max_size="1GB"),
+        )
+
+        assert os.path.exists(os.path.join(extract_dir, "sample.txt"))
+
+
+class TestDecompressBytesWithPolicy:
+    """Tests for decompress_bytes with SecurityPolicy parameter."""
+
+    def test_decompress_bytes_with_default_policy(self):
+        """Test decompress_bytes with default policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        result = decompress_bytes(zip_data)
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_bytes_with_unlimited_policy(self):
+        """Test decompress_bytes with unlimited policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        result = decompress_bytes(zip_data, policy=SecurityPolicy.unlimited())
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_bytes_with_custom_policy(self):
+        """Test decompress_bytes with custom policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        policy = SecurityPolicy(max_size="1GB", max_ratio=1000)
+        result = decompress_bytes(zip_data, policy=policy)
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_bytes_policy_with_password(self):
+        """Test decompress_bytes with policy and password."""
+        original = [("test.txt", b"Secret content")]
+        zip_data = compress_bytes(original, password="secret")
+
+        result = decompress_bytes(
+            zip_data, password="secret", policy=SecurityPolicy.strict()
+        )
+        assert result[0] == ("test.txt", b"Secret content")
+
+
+class TestDecompressStreamWithPolicy:
+    """Tests for decompress_stream with SecurityPolicy parameter."""
+
+    def test_decompress_stream_with_default_policy(self):
+        """Test decompress_stream with default policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        result = decompress_stream(io.BytesIO(zip_data))
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_stream_with_unlimited_policy(self):
+        """Test decompress_stream with unlimited policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        result = decompress_stream(
+            io.BytesIO(zip_data), policy=SecurityPolicy.unlimited()
+        )
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_stream_with_custom_policy(self):
+        """Test decompress_stream with custom policy."""
+        original = [("test.txt", b"Test content")]
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+
+        policy = SecurityPolicy(max_size="1GB", max_ratio=1000)
+        result = decompress_stream(io.BytesIO(zip_data), policy=policy)
+        assert result[0] == ("test.txt", b"Test content")
+
+    def test_decompress_stream_policy_with_password(self):
+        """Test decompress_stream with policy and password."""
+        original = [("test.txt", b"Secret content")]
+        zip_data = compress_bytes(original, password="secret")
+
+        result = decompress_stream(
+            io.BytesIO(zip_data), password="secret", policy=SecurityPolicy.strict()
+        )
+        assert result[0] == ("test.txt", b"Secret content")

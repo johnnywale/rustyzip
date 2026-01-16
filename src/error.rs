@@ -56,7 +56,9 @@ impl From<RustyZipError> for PyErr {
             RustyZipError::WalkDirError(_) => PyIOError::new_err(err.to_string()),
             RustyZipError::PathTraversal(_) => PyValueError::new_err(err.to_string()),
             RustyZipError::ZipBomb(_, _) => PyValueError::new_err(err.to_string()),
-            RustyZipError::SuspiciousCompressionRatio(_, _) => PyValueError::new_err(err.to_string()),
+            RustyZipError::SuspiciousCompressionRatio(_, _) => {
+                PyValueError::new_err(err.to_string())
+            }
         }
     }
 }
