@@ -883,3 +883,253 @@ class TestSecurityParameters:
 
         for i in range(3):
             assert os.path.exists(os.path.join(extract_dir, f"file{i}.txt"))
+
+
+class TestLargeBinaryCompatAPI:
+    """Tests for large binary encryption/decryption using pyminizip compat API."""
+
+    @pytest.fixture
+    def large_binary_data(self):
+        """Generate 5MB of random binary data for testing."""
+        import random
+        random.seed(12345)  # Reproducible randomness
+        return bytes([random.randint(0, 255) for _ in range(5 * 1024 * 1024)])
+
+    @pytest.fixture
+    def large_binary_file(self, temp_dir, large_binary_data):
+        """Create a large binary file for testing."""
+        path = os.path.join(temp_dir, "large_binary.bin")
+        with open(path, "wb") as f:
+            f.write(large_binary_data)
+        return path
+
+    def test_large_binary_compress_uncompress_with_password(self, temp_dir, large_binary_file, large_binary_data):
+        """Test compress/uncompress of large binary with password."""
+        zip_file = os.path.join(temp_dir, "large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "LargeBinaryPassword123!"
+
+        pyminizip.compress(large_binary_file, None, zip_file, password, 5)
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        assert os.path.exists(extracted)
+
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+        assert len(extracted_data) == len(large_binary_data)
+
+    def test_large_binary_compress_multiple_with_password(self, temp_dir, large_binary_data):
+        """Test compress_multiple with large binary files and password."""
+        # Create multiple large binary files
+        files = []
+        expected_data = {}
+        for i in range(3):
+            filename = f"large{i}.bin"
+            path = os.path.join(temp_dir, filename)
+            # Create variations of the data
+            if i == 0:
+                data = large_binary_data
+            elif i == 1:
+                data = large_binary_data[::-1]  # Reversed
+            else:
+                data = bytes([(b + i) % 256 for b in large_binary_data])  # Shifted
+            with open(path, "wb") as f:
+                f.write(data)
+            files.append(path)
+            expected_data[filename] = data
+
+        zip_file = os.path.join(temp_dir, "multi_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "MultiLargeBinary!"
+
+        pyminizip.compress_multiple(files, [], zip_file, password, 5)
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+        for filename, expected in expected_data.items():
+            extracted = os.path.join(extract_dir, filename)
+            assert os.path.exists(extracted), f"{filename} not found"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == expected, f"Content mismatch for {filename}"
+
+    def test_large_binary_with_prefix_and_password(self, temp_dir, large_binary_file, large_binary_data):
+        """Test large binary with archive prefix and password."""
+        zip_file = os.path.join(temp_dir, "prefixed_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "PrefixedLargeBinary!"
+
+        pyminizip.compress(large_binary_file, "deep/nested/path", zip_file, password, 5)
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+        extracted = os.path.join(extract_dir, "deep", "nested", "path", "large_binary.bin")
+        assert os.path.exists(extracted)
+
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+
+    def test_large_binary_withoutpath_flattens(self, temp_dir, large_binary_file, large_binary_data):
+        """Test large binary with withoutpath=1 flattens directory structure."""
+        zip_file = os.path.join(temp_dir, "flatten_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "FlattenLargeBinary!"
+
+        pyminizip.compress(large_binary_file, "a/b/c/d", zip_file, password, 5)
+        pyminizip.uncompress(zip_file, password, extract_dir, 1)  # withoutpath=1
+
+        # Should be flattened
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        assert os.path.exists(extracted)
+        assert not os.path.exists(os.path.join(extract_dir, "a"))
+
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+
+    def test_large_binary_compression_levels(self, temp_dir, large_binary_file, large_binary_data):
+        """Test large binary with different compression levels."""
+        password = "CompressionLevelTest!"
+
+        for level in [1, 5, 9]:
+            zip_file = os.path.join(temp_dir, f"level{level}.zip")
+            extract_dir = os.path.join(temp_dir, f"extracted_{level}")
+
+            pyminizip.compress(large_binary_file, None, zip_file, password, level)
+            pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+            extracted = os.path.join(extract_dir, "large_binary.bin")
+            with open(extracted, "rb") as f:
+                extracted_data = f.read()
+
+            assert extracted_data == large_binary_data, f"Mismatch at level {level}"
+
+    def test_large_binary_with_security_params(self, temp_dir, large_binary_file, large_binary_data):
+        """Test large binary with custom security parameters."""
+        zip_file = os.path.join(temp_dir, "secure_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "SecureLargeBinary!"
+
+        pyminizip.compress(large_binary_file, None, zip_file, password, 5)
+        pyminizip.uncompress(
+            zip_file, password, extract_dir, 0,
+            max_size=10 * 1024 * 1024 * 1024,  # 10GB
+            max_ratio=1000,
+            allow_symlinks=False
+        )
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+
+    def test_large_binary_disabled_security_limits(self, temp_dir, large_binary_file, large_binary_data):
+        """Test large binary with disabled security limits (permissive mode)."""
+        zip_file = os.path.join(temp_dir, "permissive_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "PermissiveLargeBinary!"
+
+        pyminizip.compress(large_binary_file, None, zip_file, password, 5)
+        pyminizip.uncompress(
+            zip_file, password, extract_dir, 0,
+            max_size=0,  # Disabled
+            max_ratio=0  # Disabled
+        )
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+
+    def test_large_binary_zipcrypto_python_zipfile_readable(self, temp_dir, large_binary_file, large_binary_data):
+        """Verify large binary encrypted with ZipCrypto is readable by Python's zipfile."""
+        zip_file = os.path.join(temp_dir, "zipcrypto_large.zip")
+        password = "ZipCryptoLarge!"
+
+        pyminizip.compress(large_binary_file, None, zip_file, password, 5)
+
+        # Verify Python's standard zipfile can read it (ZipCrypto only)
+        with zipfile.ZipFile(zip_file, 'r') as zf:
+            zf.setpassword(password.encode('utf-8'))
+            extracted_data = zf.read("large_binary.bin")
+
+        assert extracted_data == large_binary_data
+        assert len(extracted_data) == len(large_binary_data)
+
+    def test_large_binary_content_all_byte_values(self, temp_dir):
+        """Test large binary containing all possible byte values multiple times."""
+        # Create data with all byte values repeated
+        all_bytes_data = bytes(range(256)) * (5 * 1024 * 4)  # ~5MB
+
+        binary_file = os.path.join(temp_dir, "all_bytes.bin")
+        with open(binary_file, "wb") as f:
+            f.write(all_bytes_data)
+
+        zip_file = os.path.join(temp_dir, "all_bytes.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "AllBytesTest!"
+
+        pyminizip.compress(binary_file, None, zip_file, password, 5)
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+        extracted = os.path.join(extract_dir, "all_bytes.bin")
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == all_bytes_data
+
+    def test_cross_api_compat_vs_rustyzipper(self, temp_dir, large_binary_file, large_binary_data):
+        """Verify compat API and rustyzipper API can interoperate for large binaries."""
+        password = "CrossAPICompat!"
+
+        # Compress with compat API (ZipCrypto)
+        zip_compat = os.path.join(temp_dir, "compat.zip")
+        pyminizip.compress(large_binary_file, None, zip_compat, password, 5)
+
+        # Decompress with rustyzipper API
+        extract_dir = os.path.join(temp_dir, "rustyzipper_extracted")
+        rustyzipper.decompress_file(zip_compat, extract_dir, password=password)
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+
+    def test_large_binary_progress_callback(self, temp_dir, large_binary_data):
+        """Test compress_multiple with large binary and progress callback."""
+        # Create large binary files
+        files = []
+        for i in range(2):
+            path = os.path.join(temp_dir, f"large{i}.bin")
+            with open(path, "wb") as f:
+                f.write(large_binary_data)
+            files.append(path)
+
+        zip_file = os.path.join(temp_dir, "progress_large.zip")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        password = "ProgressLarge!"
+
+        progress_calls = []
+        def on_progress(count):
+            progress_calls.append(count)
+
+        pyminizip.compress_multiple(files, [], zip_file, password, 5, on_progress)
+
+        assert len(progress_calls) == 1
+        assert progress_calls[0] == 2
+
+        # Verify extraction works
+        pyminizip.uncompress(zip_file, password, extract_dir, 0)
+
+        for i in range(2):
+            extracted = os.path.join(extract_dir, f"large{i}.bin")
+            with open(extracted, "rb") as f:
+                extracted_data = f.read()
+            assert extracted_data == large_binary_data

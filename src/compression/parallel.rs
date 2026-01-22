@@ -183,22 +183,13 @@ pub fn compress_directory_parallel(
                     let mut data = Vec::new();
                     reader.read_to_end(&mut data)?;
 
-                    // Pre-compress if using deflate
-                    let compressed_data = if compression_level.0 > 0 {
-                        use flate2::write::DeflateEncoder;
-                        use flate2::Compression;
-
-                        let mut encoder =
-                            DeflateEncoder::new(Vec::new(), Compression::new(compression_level.0));
-                        encoder.write_all(&data)?;
-                        encoder.finish()?
-                    } else {
-                        data
-                    };
+                    // Note: Do NOT pre-compress here. The ZIP writer in add_bytes_to_zip_with_time
+                    // handles compression. Pre-compressing would cause double compression,
+                    // resulting in extracted files containing raw deflate bytes.
 
                     Ok(CompressedFileData {
                         archive_name: archive_name.clone(),
-                        data: compressed_data,
+                        data,
                         last_modified,
                     })
                 })
