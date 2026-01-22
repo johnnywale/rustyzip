@@ -1729,6 +1729,857 @@ class TestDecompressBytesWithPolicy:
         assert result[0] == ("test.txt", b"Secret content")
 
 
+class TestLargeBinaryEncryption:
+    """Tests for large binary encryption/decryption across all APIs."""
+
+    @pytest.fixture
+    def large_binary_data(self):
+        """Generate 5MB of random binary data for testing."""
+        import random
+        random.seed(42)  # Reproducible randomness
+        # Create diverse binary data with all byte values
+        return bytes([random.randint(0, 255) for _ in range(5 * 1024 * 1024)])
+
+    @pytest.fixture
+    def large_binary_file(self, temp_dir, large_binary_data):
+        """Create a large binary file for testing."""
+        path = os.path.join(temp_dir, "large_binary.bin")
+        with open(path, "wb") as f:
+            f.write(large_binary_data)
+        return path
+
+    def test_compress_bytes_large_binary_aes256(self, large_binary_data):
+        """Test compress_bytes/decompress_bytes with large binary and AES256."""
+        original = [("large.bin", large_binary_data)]
+        password = "AES256LargeBinaryTest!"
+
+        zip_data = compress_bytes(
+            original,
+            password=password,
+            encryption=EncryptionMethod.AES256,
+        )
+        result = decompress_bytes(zip_data, password=password)
+
+        assert len(result) == 1
+        assert result[0][0] == "large.bin"
+        assert result[0][1] == large_binary_data
+        assert len(result[0][1]) == len(large_binary_data)
+
+    def test_compress_bytes_large_binary_zipcrypto(self, large_binary_data):
+        """Test compress_bytes/decompress_bytes with large binary and ZipCrypto."""
+        original = [("large.bin", large_binary_data)]
+        password = "ZipCryptoLargeBinaryTest!"
+
+        zip_data = compress_bytes(
+            original,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        result = decompress_bytes(zip_data, password=password)
+
+        assert len(result) == 1
+        assert result[0][0] == "large.bin"
+        assert result[0][1] == large_binary_data
+        assert len(result[0][1]) == len(large_binary_data)
+
+    def test_compress_file_large_binary_aes256(self, temp_dir, large_binary_file, large_binary_data):
+        """Test compress_file/decompress_file with large binary and AES256."""
+        zip_file = os.path.join(temp_dir, "large_aes256.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_aes256")
+        password = "FileAES256Test!"
+
+        compress_file(large_binary_file, zip_file, password=password)
+        decompress_file(zip_file, extract_dir, password=password)
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        assert os.path.exists(extracted)
+
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+        assert len(extracted_data) == len(large_binary_data)
+
+    def test_compress_file_large_binary_zipcrypto(self, temp_dir, large_binary_file, large_binary_data):
+        """Test compress_file/decompress_file with large binary and ZipCrypto."""
+        zip_file = os.path.join(temp_dir, "large_zipcrypto.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_zipcrypto")
+        password = "FileZipCryptoTest!"
+
+        compress_file(
+            large_binary_file,
+            zip_file,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        decompress_file(zip_file, extract_dir, password=password)
+
+        extracted = os.path.join(extract_dir, "large_binary.bin")
+        assert os.path.exists(extracted)
+
+        with open(extracted, "rb") as f:
+            extracted_data = f.read()
+
+        assert extracted_data == large_binary_data
+        assert len(extracted_data) == len(large_binary_data)
+
+    def test_compress_stream_large_binary_aes256(self, large_binary_data):
+        """Test compress_stream/decompress_stream with large binary and AES256."""
+        password = "StreamAES256Test!"
+        input_file = io.BytesIO(large_binary_data)
+        zip_output = io.BytesIO()
+
+        compress_stream(
+            [("large.bin", input_file)],
+            zip_output,
+            password=password,
+            encryption=EncryptionMethod.AES256,
+        )
+
+        zip_output.seek(0)
+        result = decompress_stream(zip_output, password=password)
+
+        assert len(result) == 1
+        assert result[0][0] == "large.bin"
+        assert result[0][1] == large_binary_data
+        assert len(result[0][1]) == len(large_binary_data)
+
+    def test_compress_stream_large_binary_zipcrypto(self, large_binary_data):
+        """Test compress_stream/decompress_stream with large binary and ZipCrypto."""
+        password = "StreamZipCryptoTest!"
+        input_file = io.BytesIO(large_binary_data)
+        zip_output = io.BytesIO()
+
+        compress_stream(
+            [("large.bin", input_file)],
+            zip_output,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+
+        zip_output.seek(0)
+        result = decompress_stream(zip_output, password=password)
+
+        assert len(result) == 1
+        assert result[0][0] == "large.bin"
+        assert result[0][1] == large_binary_data
+        assert len(result[0][1]) == len(large_binary_data)
+
+    def test_open_zip_stream_large_binary_aes256(self, large_binary_data):
+        """Test open_zip_stream with large binary and AES256."""
+        password = "OpenStreamAES256Test!"
+        original = [("large.bin", large_binary_data)]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+
+        files = list(open_zip_stream(zip_data, password=password))
+
+        assert len(files) == 1
+        assert files[0][0] == "large.bin"
+        assert files[0][1] == large_binary_data
+        assert len(files[0][1]) == len(large_binary_data)
+
+    def test_open_zip_stream_from_file_large_binary_aes256(self, temp_dir, large_binary_data):
+        """Test open_zip_stream_from_file with large binary and AES256."""
+        password = "FileStreamAES256Test!"
+        original = [("large.bin", large_binary_data)]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+
+        zip_path = os.path.join(temp_dir, "large_stream.zip")
+        with open(zip_path, "wb") as f:
+            f.write(zip_data)
+
+        with open(zip_path, "rb") as f:
+            reader = open_zip_stream_from_file(f, password=password)
+            files = list(reader)
+
+        assert len(files) == 1
+        assert files[0][0] == "large.bin"
+        assert files[0][1] == large_binary_data
+        assert len(files[0][1]) == len(large_binary_data)
+
+    def test_cross_api_consistency_aes256(self, temp_dir, large_binary_data):
+        """Verify all APIs produce identical decrypted content with AES256."""
+        password = "CrossAPITestAES256!"
+        filename = "cross_api_test.bin"
+
+        # Create file for file-based API
+        source_file = os.path.join(temp_dir, filename)
+        with open(source_file, "wb") as f:
+            f.write(large_binary_data)
+
+        # Method 1: compress_bytes
+        zip_bytes = compress_bytes(
+            [(filename, large_binary_data)],
+            password=password,
+            encryption=EncryptionMethod.AES256,
+        )
+        result_bytes = decompress_bytes(zip_bytes, password=password)
+
+        # Method 2: compress_stream
+        input_stream = io.BytesIO(large_binary_data)
+        output_stream = io.BytesIO()
+        compress_stream(
+            [(filename, input_stream)],
+            output_stream,
+            password=password,
+            encryption=EncryptionMethod.AES256,
+        )
+        output_stream.seek(0)
+        result_stream = decompress_stream(output_stream, password=password)
+
+        # Method 3: compress_file
+        zip_file_path = os.path.join(temp_dir, "file_api.zip")
+        extract_dir = os.path.join(temp_dir, "file_extracted")
+        compress_file(source_file, zip_file_path, password=password)
+        decompress_file(zip_file_path, extract_dir, password=password)
+        with open(os.path.join(extract_dir, filename), "rb") as f:
+            result_file = f.read()
+
+        # Method 4: open_zip_stream
+        result_open_stream = list(open_zip_stream(zip_bytes, password=password))
+
+        # Verify all results match the original
+        assert result_bytes[0][1] == large_binary_data, "compress_bytes result mismatch"
+        assert result_stream[0][1] == large_binary_data, "compress_stream result mismatch"
+        assert result_file == large_binary_data, "compress_file result mismatch"
+        assert result_open_stream[0][1] == large_binary_data, "open_zip_stream result mismatch"
+
+        # Verify all results are identical to each other
+        assert result_bytes[0][1] == result_stream[0][1] == result_file == result_open_stream[0][1]
+
+    def test_cross_api_consistency_zipcrypto(self, temp_dir, large_binary_data):
+        """Verify all APIs produce identical decrypted content with ZipCrypto."""
+        password = "CrossAPITestZipCrypto!"
+        filename = "cross_api_zipcrypto.bin"
+
+        # Create file for file-based API
+        source_file = os.path.join(temp_dir, filename)
+        with open(source_file, "wb") as f:
+            f.write(large_binary_data)
+
+        # Method 1: compress_bytes
+        zip_bytes = compress_bytes(
+            [(filename, large_binary_data)],
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        result_bytes = decompress_bytes(zip_bytes, password=password)
+
+        # Method 2: compress_stream
+        input_stream = io.BytesIO(large_binary_data)
+        output_stream = io.BytesIO()
+        compress_stream(
+            [(filename, input_stream)],
+            output_stream,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        output_stream.seek(0)
+        result_stream = decompress_stream(output_stream, password=password)
+
+        # Method 3: compress_file
+        zip_file_path = os.path.join(temp_dir, "file_api_zipcrypto.zip")
+        extract_dir = os.path.join(temp_dir, "file_extracted_zipcrypto")
+        compress_file(
+            source_file,
+            zip_file_path,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        decompress_file(zip_file_path, extract_dir, password=password)
+        with open(os.path.join(extract_dir, filename), "rb") as f:
+            result_file = f.read()
+
+        # Method 4: open_zip_stream
+        result_open_stream = list(open_zip_stream(zip_bytes, password=password))
+
+        # Verify all results match the original
+        assert result_bytes[0][1] == large_binary_data, "compress_bytes result mismatch"
+        assert result_stream[0][1] == large_binary_data, "compress_stream result mismatch"
+        assert result_file == large_binary_data, "compress_file result mismatch"
+        assert result_open_stream[0][1] == large_binary_data, "open_zip_stream result mismatch"
+
+    def test_multiple_large_binaries_encrypted(self, large_binary_data):
+        """Test encrypting multiple large binary files in one archive."""
+        password = "MultipleLargeBinaries!"
+
+        # Create 3 variations of the large data
+        data1 = large_binary_data
+        data2 = large_binary_data[::-1]  # Reversed
+        data3 = bytes([(b + 1) % 256 for b in large_binary_data])  # Shifted
+
+        original = [
+            ("file1.bin", data1),
+            ("file2.bin", data2),
+            ("file3.bin", data3),
+        ]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+
+        assert result_dict["file1.bin"] == data1
+        assert result_dict["file2.bin"] == data2
+        assert result_dict["file3.bin"] == data3
+
+    def test_compression_levels_with_large_binary_encrypted(self, large_binary_data):
+        """Test different compression levels work correctly with large encrypted data."""
+        password = "CompressionLevelTest!"
+
+        for level in [CompressionLevel.STORE, CompressionLevel.FAST, CompressionLevel.DEFAULT, CompressionLevel.BEST]:
+            original = [("large.bin", large_binary_data)]
+
+            zip_data = compress_bytes(
+                original,
+                password=password,
+                encryption=EncryptionMethod.AES256,
+                compression_level=level,
+            )
+            result = decompress_bytes(zip_data, password=password)
+
+            assert result[0][1] == large_binary_data, f"Mismatch at compression level {level}"
+
+
+class TestMultipleFilesEncryption:
+    """Tests for multiple files encryption/decryption across all APIs."""
+
+    @pytest.fixture
+    def multiple_files_data(self):
+        """Generate test data for multiple files with different content types."""
+        import random
+        random.seed(99)
+        return {
+            "text1.txt": b"Hello, World! This is a test file.",
+            "text2.txt": b"Another text file with different content.\nMultiple lines here.",
+            "binary1.bin": bytes([random.randint(0, 255) for _ in range(10000)]),
+            "binary2.bin": bytes(range(256)) * 100,
+            "empty.dat": b"",
+            "unicode.txt": "Unicode: 中文 日本語 한국어 🎉".encode("utf-8"),
+            "nested/deep/file.txt": b"Nested file content",
+            "nested/another.bin": bytes([i % 256 for i in range(5000)]),
+            "data/config.json": b'{"key": "value", "number": 42, "array": [1, 2, 3]}',
+            "data/large.bin": bytes([random.randint(0, 255) for _ in range(100000)]),
+        }
+
+    @pytest.fixture
+    def multiple_files_on_disk(self, temp_dir, multiple_files_data):
+        """Create multiple files on disk for file-based API tests."""
+        files = {}
+        for name, content in multiple_files_data.items():
+            # Create directory structure if needed
+            file_path = os.path.join(temp_dir, "source", name)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(content)
+            files[name] = file_path
+        return files
+
+    # =========================================================================
+    # compress_bytes / decompress_bytes tests
+    # =========================================================================
+
+    def test_compress_bytes_multiple_files_aes256(self, multiple_files_data):
+        """Test compress_bytes with multiple files and AES256 encryption."""
+        password = "MultiFilesAES256!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    def test_compress_bytes_multiple_files_zipcrypto(self, multiple_files_data):
+        """Test compress_bytes with multiple files and ZipCrypto encryption."""
+        password = "MultiFilesZipCrypto!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(
+            original,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    def test_compress_bytes_multiple_files_no_encryption(self, multiple_files_data):
+        """Test compress_bytes with multiple files without encryption."""
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(original, encryption=EncryptionMethod.NONE)
+        result = decompress_bytes(zip_data)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    # =========================================================================
+    # compress_files / decompress_file tests
+    # =========================================================================
+
+    def test_compress_files_multiple_aes256(self, temp_dir, multiple_files_on_disk, multiple_files_data):
+        """Test compress_files with multiple files and AES256 encryption."""
+        password = "CompressFilesAES256!"
+        zip_file = os.path.join(temp_dir, "multi_files_aes256.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_aes256")
+
+        # Get flat file list (exclude nested for compress_files)
+        flat_files = {k: v for k, v in multiple_files_on_disk.items() if "/" not in k}
+        file_paths = list(flat_files.values())
+
+        compress_files(file_paths, zip_file, password=password, encryption=EncryptionMethod.AES256)
+        decompress_file(zip_file, extract_dir, password=password)
+
+        for name in flat_files.keys():
+            extracted = os.path.join(extract_dir, name)
+            assert os.path.exists(extracted), f"{name} not found"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == multiple_files_data[name], f"Content mismatch for {name}"
+
+    def test_compress_files_multiple_zipcrypto(self, temp_dir, multiple_files_on_disk, multiple_files_data):
+        """Test compress_files with multiple files and ZipCrypto encryption."""
+        password = "CompressFilesZipCrypto!"
+        zip_file = os.path.join(temp_dir, "multi_files_zipcrypto.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_zipcrypto")
+
+        flat_files = {k: v for k, v in multiple_files_on_disk.items() if "/" not in k}
+        file_paths = list(flat_files.values())
+
+        compress_files(
+            file_paths,
+            zip_file,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        decompress_file(zip_file, extract_dir, password=password)
+
+        for name in flat_files.keys():
+            extracted = os.path.join(extract_dir, name)
+            assert os.path.exists(extracted), f"{name} not found"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == multiple_files_data[name], f"Content mismatch for {name}"
+
+    def test_compress_files_with_prefixes_aes256(self, temp_dir, multiple_files_on_disk, multiple_files_data):
+        """Test compress_files with prefixes and AES256 encryption."""
+        password = "PrefixesAES256!"
+        zip_file = os.path.join(temp_dir, "prefixed_aes256.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_prefixed")
+
+        flat_files = {k: v for k, v in multiple_files_on_disk.items() if "/" not in k}
+        file_paths = list(flat_files.values())
+        prefixes = [f"folder{i}" for i in range(len(file_paths))]
+
+        compress_files(
+            file_paths,
+            zip_file,
+            prefixes=prefixes,
+            password=password,
+            encryption=EncryptionMethod.AES256,
+        )
+        decompress_file(zip_file, extract_dir, password=password)
+
+        for i, name in enumerate(flat_files.keys()):
+            extracted = os.path.join(extract_dir, f"folder{i}", name)
+            assert os.path.exists(extracted), f"{name} not found in folder{i}"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == multiple_files_data[name], f"Content mismatch for {name}"
+
+    # =========================================================================
+    # compress_directory / decompress_file tests
+    # =========================================================================
+
+    def test_compress_directory_aes256(self, temp_dir):
+        """Test compress_directory with AES256 encryption."""
+        password = "DirectoryAES256!"
+
+        # Create test data directly
+        test_data = {
+            "text1.txt": b"Hello, World! This is a test file.",
+            "text2.txt": b"Another text file content.",
+            "binary.bin": bytes(range(256)),
+            "nested/deep/file.txt": b"Nested file content",
+            "data/config.json": b'{"key": "value"}',
+        }
+
+        # Create files on disk
+        source_dir = os.path.join(temp_dir, "source_aes")
+        for name, content in test_data.items():
+            file_path = os.path.join(source_dir, name.replace("/", os.sep))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+        zip_file = os.path.join(temp_dir, "directory_aes256.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_dir")
+
+        compress_directory(source_dir, zip_file, password=password, encryption=EncryptionMethod.AES256)
+        decompress_file(zip_file, extract_dir, password=password)
+
+        for name, expected in test_data.items():
+            extracted = os.path.join(extract_dir, name.replace("/", os.sep))
+            assert os.path.exists(extracted), f"{name} not found"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == expected, f"Content mismatch for {name}"
+
+    def test_compress_directory_zipcrypto(self, temp_dir):
+        """Test compress_directory with ZipCrypto encryption."""
+        password = "DirectoryZipCrypto!"
+
+        # Create test data directly
+        test_data = {
+            "text1.txt": b"Hello, World! This is a test file.",
+            "text2.txt": b"Another text file content.",
+            "binary.bin": bytes(range(256)),
+            "nested/deep/file.txt": b"Nested file content",
+            "data/config.json": b'{"key": "value"}',
+        }
+
+        # Create files on disk
+        source_dir = os.path.join(temp_dir, "source_zc")
+        for name, content in test_data.items():
+            file_path = os.path.join(source_dir, name.replace("/", os.sep))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+        zip_file = os.path.join(temp_dir, "directory_zipcrypto.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_dir_zc")
+
+        compress_directory(
+            source_dir,
+            zip_file,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        decompress_file(zip_file, extract_dir, password=password)
+
+        for name, expected in test_data.items():
+            extracted = os.path.join(extract_dir, name.replace("/", os.sep))
+            assert os.path.exists(extracted), f"{name} not found"
+            with open(extracted, "rb") as f:
+                actual = f.read()
+            assert actual == expected, f"Content mismatch for {name}"
+
+    def test_compress_directory_with_patterns_aes256(self, temp_dir, multiple_files_on_disk):
+        """Test compress_directory with include/exclude patterns and AES256."""
+        password = "PatternsAES256!"
+        source_dir = os.path.join(temp_dir, "source")
+        zip_file = os.path.join(temp_dir, "patterns_aes256.zip")
+        extract_dir = os.path.join(temp_dir, "extracted_patterns")
+
+        # Only include .txt files
+        compress_directory(
+            source_dir,
+            zip_file,
+            password=password,
+            encryption=EncryptionMethod.AES256,
+            include_patterns=["*.txt"],
+        )
+        decompress_file(zip_file, extract_dir, password=password)
+
+        # Verify only .txt files were included
+        for root, dirs, files in os.walk(extract_dir):
+            for f in files:
+                assert f.endswith(".txt"), f"Non-.txt file found: {f}"
+
+    # =========================================================================
+    # compress_stream / decompress_stream tests
+    # =========================================================================
+
+    def test_compress_stream_multiple_files_aes256(self, multiple_files_data):
+        """Test compress_stream with multiple files and AES256 encryption."""
+        password = "StreamMultiAES256!"
+
+        input_files = [(name, io.BytesIO(data)) for name, data in multiple_files_data.items()]
+        output = io.BytesIO()
+
+        compress_stream(input_files, output, password=password, encryption=EncryptionMethod.AES256)
+
+        output.seek(0)
+        result = decompress_stream(output, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    def test_compress_stream_multiple_files_zipcrypto(self, multiple_files_data):
+        """Test compress_stream with multiple files and ZipCrypto encryption."""
+        password = "StreamMultiZipCrypto!"
+
+        input_files = [(name, io.BytesIO(data)) for name, data in multiple_files_data.items()]
+        output = io.BytesIO()
+
+        compress_stream(
+            input_files,
+            output,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+
+        output.seek(0)
+        result = decompress_stream(output, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    def test_compress_stream_to_file_multiple_aes256(self, temp_dir, multiple_files_data):
+        """Test compress_stream writing to file with multiple files and AES256."""
+        password = "StreamToFileAES256!"
+        zip_file = os.path.join(temp_dir, "stream_to_file.zip")
+
+        input_files = [(name, io.BytesIO(data)) for name, data in multiple_files_data.items()]
+
+        with open(zip_file, "wb") as out:
+            compress_stream(input_files, out, password=password, encryption=EncryptionMethod.AES256)
+
+        with open(zip_file, "rb") as f:
+            result = decompress_stream(f, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    # =========================================================================
+    # open_zip_stream tests
+    # =========================================================================
+
+    def test_open_zip_stream_multiple_files_aes256(self, multiple_files_data):
+        """Test open_zip_stream with multiple files and AES256 encryption."""
+        password = "OpenStreamMultiAES256!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+
+        reader = open_zip_stream(zip_data, password=password)
+
+        # Test iteration
+        result_dict = {}
+        for name, data in reader:
+            result_dict[name] = data
+
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    def test_open_zip_stream_multiple_files_zipcrypto(self, multiple_files_data):
+        """Test open_zip_stream with multiple files and ZipCrypto encryption."""
+        password = "OpenStreamMultiZipCrypto!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(
+            original,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+
+        reader = open_zip_stream(zip_data, password=password)
+
+        # Test namelist and read
+        names = reader.namelist()
+        assert len(names) == len(multiple_files_data)
+
+        for name, expected in multiple_files_data.items():
+            assert name in names, f"{name} not in namelist"
+            actual = reader.read(name)
+            assert actual == expected, f"Content mismatch for {name}"
+
+    def test_open_zip_stream_from_file_multiple_aes256(self, temp_dir, multiple_files_data):
+        """Test open_zip_stream_from_file with multiple files and AES256."""
+        password = "FileStreamMultiAES256!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+
+        zip_path = os.path.join(temp_dir, "multi_stream.zip")
+        with open(zip_path, "wb") as f:
+            f.write(zip_data)
+
+        with open(zip_path, "rb") as f:
+            reader = open_zip_stream_from_file(f, password=password)
+
+            assert len(reader) == len(multiple_files_data)
+
+            result_dict = {}
+            for name, data in reader:
+                result_dict[name] = data
+
+        for name, expected in multiple_files_data.items():
+            assert result_dict[name] == expected, f"Content mismatch for {name}"
+
+    # =========================================================================
+    # Cross-API consistency tests
+    # =========================================================================
+
+    def test_cross_api_multiple_files_consistency_aes256(self, temp_dir):
+        """Verify compress_bytes, compress_stream, and open_zip_stream produce identical results with AES256."""
+        password = "CrossAPIMultiAES256!"
+
+        # Use simple test data
+        test_data = {
+            "text1.txt": b"Hello, World! This is a test file.",
+            "text2.txt": b"Another text file content.",
+            "binary.bin": bytes(range(256)),
+            "config.json": b'{"key": "value"}',
+        }
+
+        # Method 1: compress_bytes
+        original = [(name, data) for name, data in test_data.items()]
+        zip_bytes = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result_bytes = {name: data for name, data in decompress_bytes(zip_bytes, password=password)}
+
+        # Method 2: compress_stream
+        input_files = [(name, io.BytesIO(data)) for name, data in test_data.items()]
+        output_stream = io.BytesIO()
+        compress_stream(input_files, output_stream, password=password, encryption=EncryptionMethod.AES256)
+        output_stream.seek(0)
+        result_stream = {name: data for name, data in decompress_stream(output_stream, password=password)}
+
+        # Method 3: open_zip_stream
+        result_open = {name: data for name, data in open_zip_stream(zip_bytes, password=password)}
+
+        # Verify all match original
+        for name, expected in test_data.items():
+            assert result_bytes[name] == expected, f"compress_bytes mismatch for {name}"
+            assert result_stream[name] == expected, f"compress_stream mismatch for {name}"
+            assert result_open[name] == expected, f"open_zip_stream mismatch for {name}"
+
+    def test_cross_api_multiple_files_consistency_zipcrypto(self, temp_dir):
+        """Verify compress_bytes, compress_stream, and open_zip_stream produce identical results with ZipCrypto."""
+        password = "CrossAPIMultiZipCrypto!"
+
+        # Use simple test data
+        test_data = {
+            "text1.txt": b"Hello, World! This is a test file.",
+            "text2.txt": b"Another text file content.",
+            "binary.bin": bytes(range(256)),
+            "config.json": b'{"key": "value"}',
+        }
+
+        # Method 1: compress_bytes
+        original = [(name, data) for name, data in test_data.items()]
+        zip_bytes = compress_bytes(
+            original,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        result_bytes = {name: data for name, data in decompress_bytes(zip_bytes, password=password)}
+
+        # Method 2: compress_stream
+        input_files = [(name, io.BytesIO(data)) for name, data in test_data.items()]
+        output_stream = io.BytesIO()
+        compress_stream(
+            input_files,
+            output_stream,
+            password=password,
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True,
+        )
+        output_stream.seek(0)
+        result_stream = {name: data for name, data in decompress_stream(output_stream, password=password)}
+
+        # Method 3: open_zip_stream
+        result_open = {name: data for name, data in open_zip_stream(zip_bytes, password=password)}
+
+        # Verify all match original
+        for name, expected in test_data.items():
+            assert result_bytes[name] == expected, f"compress_bytes mismatch for {name}"
+            assert result_stream[name] == expected, f"compress_stream mismatch for {name}"
+            assert result_open[name] == expected, f"open_zip_stream mismatch for {name}"
+
+    # =========================================================================
+    # Compression level tests
+    # =========================================================================
+
+    def test_multiple_files_compression_levels_aes256(self, multiple_files_data):
+        """Test multiple files with different compression levels and AES256."""
+        password = "LevelsMultiAES256!"
+        original = [(name, data) for name, data in multiple_files_data.items()]
+
+        for level in [CompressionLevel.STORE, CompressionLevel.FAST, CompressionLevel.DEFAULT, CompressionLevel.BEST]:
+            zip_data = compress_bytes(
+                original,
+                password=password,
+                encryption=EncryptionMethod.AES256,
+                compression_level=level,
+            )
+            result = decompress_bytes(zip_data, password=password)
+
+            result_dict = {name: data for name, data in result}
+            for name, expected in multiple_files_data.items():
+                assert result_dict[name] == expected, f"Mismatch for {name} at level {level}"
+
+    # =========================================================================
+    # Edge cases
+    # =========================================================================
+
+    def test_multiple_empty_files_encrypted(self):
+        """Test multiple empty files with encryption."""
+        password = "EmptyFilesTest!"
+        original = [
+            ("empty1.txt", b""),
+            ("empty2.bin", b""),
+            ("empty3.dat", b""),
+        ]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in original:
+            assert result_dict[name] == expected
+
+    def test_many_small_files_encrypted(self):
+        """Test many small files with encryption."""
+        password = "ManySmallFiles!"
+        original = [(f"file_{i:03d}.txt", f"Content {i}".encode()) for i in range(100)]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in original:
+            assert result_dict[name] == expected, f"Mismatch for {name}"
+
+    def test_deeply_nested_files_encrypted(self):
+        """Test deeply nested directory structure with encryption."""
+        password = "DeeplyNested!"
+        original = [
+            ("a/b/c/d/e/f/g/deep.txt", b"Very deep file"),
+            ("a/b/c/d/e/f/g/h/i/j/deeper.txt", b"Even deeper file"),
+            ("x/y/z/another.bin", bytes(range(256))),
+        ]
+
+        zip_data = compress_bytes(original, password=password, encryption=EncryptionMethod.AES256)
+        result = decompress_bytes(zip_data, password=password)
+
+        result_dict = {name: data for name, data in result}
+        for name, expected in original:
+            assert result_dict[name] == expected, f"Mismatch for {name}"
+
+
 class TestDecompressStreamWithPolicy:
     """Tests for decompress_stream with SecurityPolicy parameter."""
 
