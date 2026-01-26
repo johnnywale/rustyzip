@@ -1372,3 +1372,1211 @@ fn test_compat_decompress_withoutpath() {
     assert!(extract_path.join("file2.txt").exists());
     assert!(!extract_path.join("dir1").exists());
 }
+
+// ========================================================================
+// Large Binary Encryption Tests (5MB)
+// ========================================================================
+
+/// Generate 5MB of binary test data with varied patterns
+fn generate_large_binary_data() -> Vec<u8> {
+    const SIZE: usize = 5 * 1024 * 1024; // 5MB
+    let mut data = Vec::with_capacity(SIZE);
+
+    // Mix of patterns to test compression and encryption
+    for i in 0..SIZE {
+        data.push(((i % 256) ^ ((i / 256) % 256)) as u8);
+    }
+    data
+}
+
+#[test]
+fn test_large_binary_compress_file_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large.bin");
+    let output_path = temp_dir.path().join("large_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let data = generate_large_binary_data();
+    fs::write(&input_path, &data).unwrap();
+
+    // Compress with AES256
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_file_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large.bin");
+    let output_path = temp_dir.path().join("large_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let data = generate_large_binary_data();
+    fs::write(&input_path, &data).unwrap();
+
+    // Compress with ZipCrypto
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_bytes_aes256() {
+    let data = generate_large_binary_data();
+    let files = vec![("large.bin", data.as_slice())];
+
+    // Compress with AES256
+    let zip_data = compress_bytes(
+        &files,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    let result = decompress_bytes(&zip_data, Some("password123")).unwrap();
+
+    // Verify
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, "large.bin");
+    assert_eq!(result[0].1.len(), data.len(), "Size mismatch");
+    assert_eq!(result[0].1, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_bytes_zipcrypto() {
+    let data = generate_large_binary_data();
+    let files = vec![("large.bin", data.as_slice())];
+
+    // Compress with ZipCrypto
+    let zip_data = compress_bytes(
+        &files,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    let result = decompress_bytes(&zip_data, Some("password123")).unwrap();
+
+    // Verify
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, "large.bin");
+    assert_eq!(result[0].1.len(), data.len(), "Size mismatch");
+    assert_eq!(result[0].1, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_files_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large.bin");
+    let output_path = temp_dir.path().join("large_files_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let data = generate_large_binary_data();
+    fs::write(&input_path, &data).unwrap();
+
+    // Compress with AES256
+    compress_files(
+        &[input_path.as_path()],
+        &[None],
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_files_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large.bin");
+    let output_path = temp_dir.path().join("large_files_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let data = generate_large_binary_data();
+    fs::write(&input_path, &data).unwrap();
+
+    // Compress with ZipCrypto
+    compress_files(
+        &[input_path.as_path()],
+        &[None],
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_directory_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    let data = generate_large_binary_data();
+    fs::write(src_dir.join("large.bin"), &data).unwrap();
+
+    let output_path = temp_dir.path().join("dir_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Compress directory with AES256
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+#[test]
+fn test_large_binary_compress_directory_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    let data = generate_large_binary_data();
+    fs::write(src_dir.join("large.bin"), &data).unwrap();
+
+    let output_path = temp_dir.path().join("dir_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Compress directory with ZipCrypto
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify content
+    let extracted_data = fs::read(extract_path.join("large.bin")).unwrap();
+    assert_eq!(extracted_data.len(), data.len(), "Size mismatch");
+    assert_eq!(extracted_data, data, "Content mismatch");
+}
+
+// ========================================================================
+// Multiple Files Encryption Tests
+// ========================================================================
+
+/// Generate test files with unique content
+fn create_multiple_test_files(dir: &Path, count: usize) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+    let mut files = Vec::with_capacity(count);
+
+    for i in 0..count {
+        let name = format!("file_{}.bin", i);
+        let path = dir.join(&name);
+
+        // Create unique content for each file
+        let content: Vec<u8> = (0..1024)
+            .map(|j| ((i + j) % 256) as u8)
+            .collect();
+
+        fs::write(&path, &content).unwrap();
+        files.push((path, content));
+    }
+
+    files
+}
+
+#[test]
+fn test_multiple_files_compress_files_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let output_path = temp_dir.path().join("multi_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let files = create_multiple_test_files(temp_dir.path(), 5);
+    let paths: Vec<&Path> = files.iter().map(|(p, _)| p.as_path()).collect();
+    let prefixes: Vec<Option<&str>> = vec![None; 5];
+
+    // Compress with AES256
+    compress_files(
+        &paths,
+        &prefixes,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (original_path, original_content) in &files {
+        let file_name = original_path.file_name().unwrap();
+        let extracted_path = extract_path.join(file_name);
+        let extracted_content = fs::read(&extracted_path).unwrap();
+
+        assert_eq!(
+            extracted_content, *original_content,
+            "Content mismatch for {:?}",
+            file_name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_files_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let output_path = temp_dir.path().join("multi_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let files = create_multiple_test_files(temp_dir.path(), 5);
+    let paths: Vec<&Path> = files.iter().map(|(p, _)| p.as_path()).collect();
+    let prefixes: Vec<Option<&str>> = vec![None; 5];
+
+    // Compress with ZipCrypto
+    compress_files(
+        &paths,
+        &prefixes,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (original_path, original_content) in &files {
+        let file_name = original_path.file_name().unwrap();
+        let extracted_path = extract_path.join(file_name);
+        let extracted_content = fs::read(&extracted_path).unwrap();
+
+        assert_eq!(
+            extracted_content, *original_content,
+            "Content mismatch for {:?}",
+            file_name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_files_with_prefixes_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let output_path = temp_dir.path().join("multi_prefix_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    let files = create_multiple_test_files(temp_dir.path(), 3);
+    let paths: Vec<&Path> = files.iter().map(|(p, _)| p.as_path()).collect();
+    let prefixes: Vec<Option<&str>> = vec![Some("dir1"), Some("dir2/sub"), Some("dir3")];
+
+    // Compress with AES256 and prefixes
+    compress_files(
+        &paths,
+        &prefixes,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content in correct directory
+    assert_eq!(
+        fs::read(extract_path.join("dir1/file_0.bin")).unwrap(),
+        files[0].1
+    );
+    assert_eq!(
+        fs::read(extract_path.join("dir2/sub/file_1.bin")).unwrap(),
+        files[1].1
+    );
+    assert_eq!(
+        fs::read(extract_path.join("dir3/file_2.bin")).unwrap(),
+        files[2].1
+    );
+}
+
+#[test]
+fn test_multiple_files_compress_bytes_aes256() {
+    // Create test data
+    let file_contents: Vec<Vec<u8>> = (0..5)
+        .map(|i| {
+            (0..1024)
+                .map(|j| ((i + j) % 256) as u8)
+                .collect()
+        })
+        .collect();
+
+    let files: Vec<(&str, &[u8])> = vec![
+        ("file_0.bin", &file_contents[0]),
+        ("file_1.bin", &file_contents[1]),
+        ("file_2.bin", &file_contents[2]),
+        ("file_3.bin", &file_contents[3]),
+        ("file_4.bin", &file_contents[4]),
+    ];
+
+    // Compress with AES256
+    let zip_data = compress_bytes(
+        &files,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    let result = decompress_bytes(&zip_data, Some("password123")).unwrap();
+
+    // Verify
+    assert_eq!(result.len(), 5);
+    for (i, (name, content)) in result.iter().enumerate() {
+        assert_eq!(name, &format!("file_{}.bin", i));
+        assert_eq!(content, &file_contents[i], "Content mismatch for {}", name);
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_bytes_zipcrypto() {
+    // Create test data
+    let file_contents: Vec<Vec<u8>> = (0..5)
+        .map(|i| {
+            (0..1024)
+                .map(|j| ((i + j) % 256) as u8)
+                .collect()
+        })
+        .collect();
+
+    let files: Vec<(&str, &[u8])> = vec![
+        ("file_0.bin", &file_contents[0]),
+        ("file_1.bin", &file_contents[1]),
+        ("file_2.bin", &file_contents[2]),
+        ("file_3.bin", &file_contents[3]),
+        ("file_4.bin", &file_contents[4]),
+    ];
+
+    // Compress with ZipCrypto
+    let zip_data = compress_bytes(
+        &files,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    let result = decompress_bytes(&zip_data, Some("password123")).unwrap();
+
+    // Verify
+    assert_eq!(result.len(), 5);
+    for (i, (name, content)) in result.iter().enumerate() {
+        assert_eq!(name, &format!("file_{}.bin", i));
+        assert_eq!(content, &file_contents[i], "Content mismatch for {}", name);
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_directory_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    // Create multiple files in directory
+    let mut expected_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    for i in 0..5 {
+        let name = format!("file_{}.bin", i);
+        let content: Vec<u8> = (0..1024)
+            .map(|j| ((i + j) % 256) as u8)
+            .collect();
+        fs::write(src_dir.join(&name), &content).unwrap();
+        expected_contents.insert(name, content);
+    }
+
+    let output_path = temp_dir.path().join("dir_multi_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Compress directory with AES256
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (name, expected_content) in &expected_contents {
+        let extracted_content = fs::read(extract_path.join(name)).unwrap();
+        assert_eq!(
+            &extracted_content, expected_content,
+            "Content mismatch for {}",
+            name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_directory_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    // Create multiple files in directory
+    let mut expected_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    for i in 0..5 {
+        let name = format!("file_{}.bin", i);
+        let content: Vec<u8> = (0..1024)
+            .map(|j| ((i + j) % 256) as u8)
+            .collect();
+        fs::write(src_dir.join(&name), &content).unwrap();
+        expected_contents.insert(name, content);
+    }
+
+    let output_path = temp_dir.path().join("dir_multi_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Compress directory with ZipCrypto
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (name, expected_content) in &expected_contents {
+        let extracted_content = fs::read(extract_path.join(name)).unwrap();
+        assert_eq!(
+            &extracted_content, expected_content,
+            "Content mismatch for {}",
+            name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_compress_directory_nested_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    // Create nested directory structure with files
+    let mut expected_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+
+    // Root level files
+    for i in 0..2 {
+        let name = format!("root_{}.bin", i);
+        let content: Vec<u8> = (0..512).map(|j| ((i + j) % 256) as u8).collect();
+        fs::write(src_dir.join(&name), &content).unwrap();
+        expected_contents.insert(name, content);
+    }
+
+    // Subdirectory files
+    let subdir = src_dir.join("subdir");
+    fs::create_dir(&subdir).unwrap();
+    for i in 0..2 {
+        let name = format!("sub_{}.bin", i);
+        let content: Vec<u8> = (0..512).map(|j| ((i + 100 + j) % 256) as u8).collect();
+        fs::write(subdir.join(&name), &content).unwrap();
+        expected_contents.insert(format!("subdir/{}", name), content);
+    }
+
+    // Deep nested directory files
+    let deep_dir = subdir.join("deep");
+    fs::create_dir(&deep_dir).unwrap();
+    let deep_content: Vec<u8> = (0..512).map(|j| ((200 + j) % 256) as u8).collect();
+    fs::write(deep_dir.join("deep_file.bin"), &deep_content).unwrap();
+    expected_contents.insert("subdir/deep/deep_file.bin".to_string(), deep_content);
+
+    let output_path = temp_dir.path().join("nested_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Compress directory with AES256
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (name, expected_content) in &expected_contents {
+        let extracted_content = fs::read(extract_path.join(name)).unwrap();
+        assert_eq!(
+            &extracted_content, expected_content,
+            "Content mismatch for {}",
+            name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_mixed_sizes_aes256() {
+    let temp_dir = tempdir().unwrap();
+    let output_path = temp_dir.path().join("mixed_sizes_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    // Create files of different sizes
+    let sizes = [0, 1, 100, 1024, 10240, 102400]; // 0B, 1B, 100B, 1KB, 10KB, 100KB
+    let mut files_info: Vec<(std::path::PathBuf, Vec<u8>)> = Vec::new();
+
+    for (i, &size) in sizes.iter().enumerate() {
+        let name = format!("file_size_{}.bin", size);
+        let path = temp_dir.path().join(&name);
+        let content: Vec<u8> = (0..size).map(|j| ((i + j) % 256) as u8).collect();
+        fs::write(&path, &content).unwrap();
+        files_info.push((path, content));
+    }
+
+    let paths: Vec<&Path> = files_info.iter().map(|(p, _)| p.as_path()).collect();
+    let prefixes: Vec<Option<&str>> = vec![None; sizes.len()];
+
+    // Compress with AES256
+    compress_files(
+        &paths,
+        &prefixes,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Decompress
+    decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+    // Verify each file's content
+    for (original_path, original_content) in &files_info {
+        let file_name = original_path.file_name().unwrap();
+        let extracted_path = extract_path.join(file_name);
+        let extracted_content = fs::read(&extracted_path).unwrap();
+
+        assert_eq!(
+            extracted_content.len(),
+            original_content.len(),
+            "Size mismatch for {:?}",
+            file_name
+        );
+        assert_eq!(
+            extracted_content, *original_content,
+            "Content mismatch for {:?}",
+            file_name
+        );
+    }
+}
+
+#[test]
+fn test_multiple_files_all_compression_levels_aes256() {
+    let temp_dir = tempdir().unwrap();
+
+    // Create test files
+    let files = create_multiple_test_files(temp_dir.path(), 3);
+    let paths: Vec<&Path> = files.iter().map(|(p, _)| p.as_path()).collect();
+    let prefixes: Vec<Option<&str>> = vec![None; 3];
+
+    // Test each compression level
+    let levels = [
+        CompressionLevel::STORE,
+        CompressionLevel::FAST,
+        CompressionLevel::DEFAULT,
+        CompressionLevel::BEST,
+    ];
+
+    for level in levels {
+        let output_path = temp_dir.path().join(format!("level_{}.zip", level.0));
+        let extract_path = temp_dir.path().join(format!("extracted_{}", level.0));
+
+        // Compress with AES256 at each level
+        compress_files(
+            &paths,
+            &prefixes,
+            &output_path,
+            Some("password123"),
+            EncryptionMethod::Aes256,
+            level,
+        )
+        .unwrap();
+
+        // Decompress
+        decompress_file(&output_path, &extract_path, Some("password123"), false).unwrap();
+
+        // Verify each file's content
+        for (original_path, original_content) in &files {
+            let file_name = original_path.file_name().unwrap();
+            let extracted_path = extract_path.join(file_name);
+            let extracted_content = fs::read(&extracted_path).unwrap();
+
+            assert_eq!(
+                extracted_content, *original_content,
+                "Content mismatch for {:?} at level {}",
+                file_name,
+                level.0
+            );
+        }
+    }
+}
+
+// ========================================================================
+// Extra Large File Tests (3GB) - Run with: cargo test -- --ignored
+// ========================================================================
+
+/// Generate large binary data by writing chunks to a file (memory efficient)
+fn generate_large_file_chunked(path: &Path, size_gb: usize) -> std::io::Result<()> {
+    use std::io::BufWriter;
+
+    let file = File::create(path)?;
+    let mut writer = BufWriter::with_capacity(1024 * 1024, file); // 1MB buffer
+
+    const CHUNK_SIZE: usize = 1024 * 1024; // 1MB chunks
+    let total_chunks = size_gb * 1024; // GB to MB
+
+    for chunk_idx in 0..total_chunks {
+        let chunk: Vec<u8> = (0..CHUNK_SIZE)
+            .map(|i| ((chunk_idx + i) % 256) as u8)
+            .collect();
+        writer.write_all(&chunk)?;
+    }
+
+    writer.flush()?;
+    Ok(())
+}
+
+/// Verify large file content by reading chunks (memory efficient)
+fn verify_large_file_chunked(path: &Path, size_gb: usize) -> std::io::Result<bool> {
+    use std::io::BufReader;
+
+    let file = File::open(path)?;
+    let mut reader = BufReader::with_capacity(1024 * 1024, file); // 1MB buffer
+
+    const CHUNK_SIZE: usize = 1024 * 1024; // 1MB chunks
+    let total_chunks = size_gb * 1024; // GB to MB
+
+    let mut buffer = vec![0u8; CHUNK_SIZE];
+
+    for chunk_idx in 0..total_chunks {
+        reader.read_exact(&mut buffer)?;
+
+        // Verify chunk content
+        for (i, &byte) in buffer.iter().enumerate() {
+            let expected = ((chunk_idx + i) % 256) as u8;
+            if byte != expected {
+                eprintln!(
+                    "Mismatch at chunk {} offset {}: expected {}, got {}",
+                    chunk_idx, i, expected, byte
+                );
+                return Ok(false);
+            }
+        }
+    }
+
+    Ok(true)
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_3gb_file_compress_file_aes256 -- --ignored
+fn test_3gb_file_compress_file_aes256() {
+    const SIZE_GB: usize = 3;
+    const MAX_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4GB limit for decompression
+
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large_3gb.bin");
+    let output_path = temp_dir.path().join("large_3gb_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    println!("Creating {}GB test file...", SIZE_GB);
+    generate_large_file_chunked(&input_path, SIZE_GB).unwrap();
+
+    let file_size = input_path.metadata().unwrap().len();
+    assert_eq!(
+        file_size,
+        (SIZE_GB * 1024 * 1024 * 1024) as u64,
+        "File size mismatch"
+    );
+    println!("Created file: {} bytes", file_size);
+
+    println!("Compressing with AES256...");
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    let zip_size = output_path.metadata().unwrap().len();
+    println!("Compressed size: {} bytes", zip_size);
+
+    println!("Decompressing...");
+    // Use decompress_file_with_limits to allow 3GB+ files (bypasses 2GB default limit)
+    decompress_file_with_limits(&output_path, &extract_path, Some("password123"), false, MAX_SIZE, 1000).unwrap();
+
+    println!("Verifying content...");
+    let extracted_path = extract_path.join("large_3gb.bin");
+    let extracted_size = extracted_path.metadata().unwrap().len();
+    assert_eq!(extracted_size, file_size, "Extracted size mismatch");
+
+    assert!(
+        verify_large_file_chunked(&extracted_path, SIZE_GB).unwrap(),
+        "Content verification failed"
+    );
+
+    println!("3GB AES256 test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_3gb_file_compress_file_zipcrypto -- --ignored
+fn test_3gb_file_compress_file_zipcrypto() {
+    const SIZE_GB: usize = 3;
+    const MAX_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4GB limit for decompression
+
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large_3gb.bin");
+    let output_path = temp_dir.path().join("large_3gb_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    println!("Creating {}GB test file...", SIZE_GB);
+    generate_large_file_chunked(&input_path, SIZE_GB).unwrap();
+
+    let file_size = input_path.metadata().unwrap().len();
+    assert_eq!(
+        file_size,
+        (SIZE_GB * 1024 * 1024 * 1024) as u64,
+        "File size mismatch"
+    );
+    println!("Created file: {} bytes", file_size);
+
+    println!("Compressing with ZipCrypto...");
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    let zip_size = output_path.metadata().unwrap().len();
+    println!("Compressed size: {} bytes", zip_size);
+
+    println!("Decompressing...");
+    decompress_file_with_limits(&output_path, &extract_path, Some("password123"), false, MAX_SIZE, 1000).unwrap();
+
+    println!("Verifying content...");
+    let extracted_path = extract_path.join("large_3gb.bin");
+    let extracted_size = extracted_path.metadata().unwrap().len();
+    assert_eq!(extracted_size, file_size, "Extracted size mismatch");
+
+    assert!(
+        verify_large_file_chunked(&extracted_path, SIZE_GB).unwrap(),
+        "Content verification failed"
+    );
+
+    println!("3GB ZipCrypto test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_3gb_file_compress_directory_aes256 -- --ignored
+fn test_3gb_file_compress_directory_aes256() {
+    const SIZE_GB: usize = 3;
+    const MAX_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4GB limit for decompression
+
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    let input_path = src_dir.join("large_3gb.bin");
+    let output_path = temp_dir.path().join("large_3gb_dir_aes.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    println!("Creating {}GB test file in directory...", SIZE_GB);
+    generate_large_file_chunked(&input_path, SIZE_GB).unwrap();
+
+    let file_size = input_path.metadata().unwrap().len();
+    assert_eq!(
+        file_size,
+        (SIZE_GB * 1024 * 1024 * 1024) as u64,
+        "File size mismatch"
+    );
+    println!("Created file: {} bytes", file_size);
+
+    println!("Compressing directory with AES256...");
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let zip_size = output_path.metadata().unwrap().len();
+    println!("Compressed size: {} bytes", zip_size);
+
+    println!("Decompressing...");
+    decompress_file_with_limits(&output_path, &extract_path, Some("password123"), false, MAX_SIZE, 1000).unwrap();
+
+    println!("Verifying content...");
+    let extracted_path = extract_path.join("large_3gb.bin");
+    let extracted_size = extracted_path.metadata().unwrap().len();
+    assert_eq!(extracted_size, file_size, "Extracted size mismatch");
+
+    assert!(
+        verify_large_file_chunked(&extracted_path, SIZE_GB).unwrap(),
+        "Content verification failed"
+    );
+
+    println!("3GB directory AES256 test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_3gb_file_compress_directory_zipcrypto -- --ignored
+fn test_3gb_file_compress_directory_zipcrypto() {
+    const SIZE_GB: usize = 3;
+    const MAX_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4GB limit for decompression
+
+    let temp_dir = tempdir().unwrap();
+    let src_dir = temp_dir.path().join("source");
+    fs::create_dir(&src_dir).unwrap();
+
+    let input_path = src_dir.join("large_3gb.bin");
+    let output_path = temp_dir.path().join("large_3gb_dir_zipcrypto.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    println!("Creating {}GB test file in directory...", SIZE_GB);
+    generate_large_file_chunked(&input_path, SIZE_GB).unwrap();
+
+    let file_size = input_path.metadata().unwrap().len();
+    assert_eq!(
+        file_size,
+        (SIZE_GB * 1024 * 1024 * 1024) as u64,
+        "File size mismatch"
+    );
+    println!("Created file: {} bytes", file_size);
+
+    println!("Compressing directory with ZipCrypto...");
+    compress_directory(
+        &src_dir,
+        &output_path,
+        Some("password123"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let zip_size = output_path.metadata().unwrap().len();
+    println!("Compressed size: {} bytes", zip_size);
+
+    println!("Decompressing...");
+    decompress_file_with_limits(&output_path, &extract_path, Some("password123"), false, MAX_SIZE, 1000).unwrap();
+
+    println!("Verifying content...");
+    let extracted_path = extract_path.join("large_3gb.bin");
+    let extracted_size = extracted_path.metadata().unwrap().len();
+    assert_eq!(extracted_size, file_size, "Extracted size mismatch");
+
+    assert!(
+        verify_large_file_chunked(&extracted_path, SIZE_GB).unwrap(),
+        "Content verification failed"
+    );
+
+    println!("3GB directory ZipCrypto test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_3gb_file_no_encryption -- --ignored
+fn test_3gb_file_no_encryption() {
+    const SIZE_GB: usize = 3;
+    const MAX_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4GB limit for decompression
+
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("large_3gb.bin");
+    let output_path = temp_dir.path().join("large_3gb_no_enc.zip");
+    let extract_path = temp_dir.path().join("extracted");
+
+    println!("Creating {}GB test file...", SIZE_GB);
+    generate_large_file_chunked(&input_path, SIZE_GB).unwrap();
+
+    let file_size = input_path.metadata().unwrap().len();
+    println!("Created file: {} bytes", file_size);
+
+    println!("Compressing without encryption...");
+    compress_file(
+        &input_path,
+        &output_path,
+        None,
+        EncryptionMethod::None,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    let zip_size = output_path.metadata().unwrap().len();
+    println!("Compressed size: {} bytes", zip_size);
+
+    println!("Decompressing...");
+    decompress_file_with_limits(&output_path, &extract_path, None, false, MAX_SIZE, 1000).unwrap();
+
+    println!("Verifying content...");
+    let extracted_path = extract_path.join("large_3gb.bin");
+    let extracted_size = extracted_path.metadata().unwrap().len();
+    assert_eq!(extracted_size, file_size, "Extracted size mismatch");
+
+    assert!(
+        verify_large_file_chunked(&extracted_path, SIZE_GB).unwrap(),
+        "Content verification failed"
+    );
+
+    println!("3GB no encryption test passed!");
+}
+
+// ========================================================================
+// Encryption Detection Tests
+// ========================================================================
+
+#[test]
+fn test_detect_encryption_none() {
+    let files = vec![("test.txt", b"Hello, World!".as_slice())];
+
+    // Compress without encryption
+    let zip_data = compress_bytes(
+        &files,
+        None,
+        EncryptionMethod::None,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption
+    let method = detect_encryption_bytes(&zip_data).unwrap();
+    assert_eq!(method, EncryptionMethod::None);
+}
+
+#[test]
+fn test_detect_encryption_aes256() {
+    let files = vec![("test.txt", b"Secret data".as_slice())];
+
+    // Compress with AES256
+    let zip_data = compress_bytes(
+        &files,
+        Some("password123"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption
+    let method = detect_encryption_bytes(&zip_data).unwrap();
+    assert_eq!(method, EncryptionMethod::Aes256);
+}
+
+#[test]
+fn test_detect_encryption_zipcrypto() {
+    let files = vec![("test.txt", b"Legacy encrypted".as_slice())];
+
+    // Compress with ZipCrypto
+    let zip_data = compress_bytes(
+        &files,
+        Some("password"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption
+    let method = detect_encryption_bytes(&zip_data).unwrap();
+    assert_eq!(method, EncryptionMethod::ZipCrypto);
+}
+
+#[test]
+fn test_detect_encryption_file() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("test.txt");
+    let output_path = temp_dir.path().join("test.zip");
+
+    // Create test file
+    fs::write(&input_path, "Test content").unwrap();
+
+    // Compress with AES256
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption from file
+    let method = detect_encryption(&output_path).unwrap();
+    assert_eq!(method, EncryptionMethod::Aes256);
+}
+
+#[test]
+fn test_detect_encryption_file_zipcrypto() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("test.txt");
+    let output_path = temp_dir.path().join("test.zip");
+
+    // Create test file
+    fs::write(&input_path, "Test content").unwrap();
+
+    // Compress with ZipCrypto
+    compress_file(
+        &input_path,
+        &output_path,
+        Some("password"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption from file
+    let method = detect_encryption(&output_path).unwrap();
+    assert_eq!(method, EncryptionMethod::ZipCrypto);
+}
+
+#[test]
+fn test_detect_encryption_file_none() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("test.txt");
+    let output_path = temp_dir.path().join("test.zip");
+
+    // Create test file
+    fs::write(&input_path, "Test content").unwrap();
+
+    // Compress without encryption
+    compress_file(
+        &input_path,
+        &output_path,
+        None,
+        EncryptionMethod::None,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption from file
+    let method = detect_encryption(&output_path).unwrap();
+    assert_eq!(method, EncryptionMethod::None);
+}
+
+#[test]
+fn test_detect_encryption_file_not_found() {
+    let temp_dir = tempdir().unwrap();
+    let nonexistent = temp_dir.path().join("nonexistent.zip");
+
+    let result = detect_encryption(&nonexistent);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        RustyZipError::FileNotFound(_) => {}
+        e => panic!("Expected FileNotFound error, got {:?}", e),
+    }
+}
+
+#[test]
+fn test_detect_encryption_multiple_files() {
+    let files = vec![
+        ("file1.txt", b"Content 1".as_slice()),
+        ("file2.txt", b"Content 2".as_slice()),
+        ("file3.txt", b"Content 3".as_slice()),
+    ];
+
+    // Compress multiple files with AES256
+    let zip_data = compress_bytes(
+        &files,
+        Some("password"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Detect encryption - should detect based on first file
+    let method = detect_encryption_bytes(&zip_data).unwrap();
+    assert_eq!(method, EncryptionMethod::Aes256);
+}

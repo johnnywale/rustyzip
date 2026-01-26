@@ -23,6 +23,10 @@ fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bindings::compress_directory, m)?)?;
     m.add_function(wrap_pyfunction!(bindings::decompress_file, m)?)?;
 
+    // Encryption detection
+    m.add_function(wrap_pyfunction!(bindings::detect_encryption, m)?)?;
+    m.add_function(wrap_pyfunction!(bindings::detect_encryption_bytes, m)?)?;
+
     // In-memory compression functions
     m.add_function(wrap_pyfunction!(bindings::compress_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(bindings::decompress_bytes, m)?)?;

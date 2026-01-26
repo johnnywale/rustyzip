@@ -20,6 +20,8 @@ from rustyzipper import (
     decompress_stream,
     open_zip_stream,
     open_zip_stream_from_file,
+    detect_encryption,
+    detect_encryption_bytes,
     EncryptionMethod,
     CompressionLevel,
     SecurityPolicy,
@@ -2619,3 +2621,145 @@ class TestDecompressStreamWithPolicy:
             io.BytesIO(zip_data), password="secret", policy=SecurityPolicy.strict()
         )
         assert result[0] == ("test.txt", b"Secret content")
+
+
+class TestDetectEncryption:
+    """Tests for detect_encryption and detect_encryption_bytes functions."""
+
+    def test_detect_encryption_bytes_none(self):
+        """Test detecting no encryption from bytes."""
+        zip_data = compress_bytes(
+            [("test.txt", b"Hello, World!")],
+            encryption=EncryptionMethod.NONE
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.NONE
+
+    def test_detect_encryption_bytes_aes256(self):
+        """Test detecting AES256 encryption from bytes."""
+        zip_data = compress_bytes(
+            [("test.txt", b"Secret data")],
+            password="password123",
+            encryption=EncryptionMethod.AES256
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.AES256
+
+    def test_detect_encryption_bytes_zipcrypto(self):
+        """Test detecting ZipCrypto encryption from bytes."""
+        zip_data = compress_bytes(
+            [("test.txt", b"Legacy encrypted")],
+            password="password",
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.ZIPCRYPTO
+
+    def test_detect_encryption_file_aes256(self, temp_dir, sample_file):
+        """Test detecting AES256 encryption from file."""
+        zip_path = os.path.join(temp_dir, "aes256.zip")
+        compress_file(
+            sample_file,
+            zip_path,
+            password="password",
+            encryption=EncryptionMethod.AES256
+        )
+        method = detect_encryption(zip_path)
+        assert method == EncryptionMethod.AES256
+
+    def test_detect_encryption_file_zipcrypto(self, temp_dir, sample_file):
+        """Test detecting ZipCrypto encryption from file."""
+        zip_path = os.path.join(temp_dir, "zipcrypto.zip")
+        compress_file(
+            sample_file,
+            zip_path,
+            password="password",
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True
+        )
+        method = detect_encryption(zip_path)
+        assert method == EncryptionMethod.ZIPCRYPTO
+
+    def test_detect_encryption_file_none(self, temp_dir, sample_file):
+        """Test detecting no encryption from file."""
+        zip_path = os.path.join(temp_dir, "none.zip")
+        compress_file(
+            sample_file,
+            zip_path,
+            encryption=EncryptionMethod.NONE
+        )
+        method = detect_encryption(zip_path)
+        assert method == EncryptionMethod.NONE
+
+    def test_detect_encryption_file_not_found(self, temp_dir):
+        """Test detect_encryption raises error for non-existent file."""
+        with pytest.raises(Exception):  # Should raise IOError or FileNotFoundError
+            detect_encryption(os.path.join(temp_dir, "nonexistent.zip"))
+
+    def test_detect_encryption_multiple_files_aes256(self):
+        """Test detecting encryption with multiple files in archive."""
+        files = [
+            ("file1.txt", b"Content 1"),
+            ("file2.txt", b"Content 2"),
+            ("subdir/file3.txt", b"Content 3"),
+        ]
+        zip_data = compress_bytes(
+            files,
+            password="password",
+            encryption=EncryptionMethod.AES256
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.AES256
+
+    def test_detect_encryption_multiple_files_zipcrypto(self):
+        """Test detecting ZipCrypto with multiple files in archive."""
+        files = [
+            ("file1.txt", b"Content 1"),
+            ("file2.txt", b"Content 2"),
+        ]
+        zip_data = compress_bytes(
+            files,
+            password="password",
+            encryption=EncryptionMethod.ZIPCRYPTO,
+            suppress_warning=True
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.ZIPCRYPTO
+
+    def test_detect_encryption_returns_enum_not_string(self):
+        """Test that detect_encryption returns EncryptionMethod enum, not string."""
+        zip_data = compress_bytes(
+            [("test.txt", b"Test")],
+            password="pass",
+            encryption=EncryptionMethod.AES256
+        )
+        method = detect_encryption_bytes(zip_data)
+
+        # Should be an enum instance, not a string
+        assert isinstance(method, EncryptionMethod)
+        assert method.value == "aes256"
+        assert method.name == "AES256"
+
+    def test_detect_encryption_empty_password_no_encryption(self):
+        """Test that empty password results in no encryption detection."""
+        # When no password is provided, encryption method doesn't matter
+        zip_data = compress_bytes(
+            [("test.txt", b"Test")],
+            password=None,
+            encryption=EncryptionMethod.NONE
+        )
+        method = detect_encryption_bytes(zip_data)
+        assert method == EncryptionMethod.NONE
+
+    def test_detect_encryption_directory_aes256(self, temp_dir, sample_directory):
+        """Test detecting encryption on compressed directory."""
+        zip_path = os.path.join(temp_dir, "dir_aes.zip")
+        compress_directory(
+            sample_directory,
+            zip_path,
+            password="password",
+            encryption=EncryptionMethod.AES256
+        )
+        method = detect_encryption(zip_path)
+        assert method == EncryptionMethod.AES256
