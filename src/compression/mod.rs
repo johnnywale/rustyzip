@@ -33,7 +33,7 @@ pub use parallel::PARALLEL_FILE_SIZE_THRESHOLD;
 // Re-export decompression functions
 pub use decompression::{
     decompress_bytes, decompress_bytes_with_limits, decompress_file, decompress_file_with_limits,
-    delete_file,
+    delete_file, detect_encryption, detect_encryption_bytes,
 };
 
 // Re-export streaming functions

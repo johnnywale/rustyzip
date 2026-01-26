@@ -5,6 +5,54 @@ use log::warn;
 use pyo3::prelude::*;
 use std::path::Path;
 
+/// Detect the encryption method used in a ZIP file.
+///
+/// This function examines the ZIP archive and returns the encryption method
+/// used. Returns "aes256", "zipcrypto", or "none".
+///
+/// # Arguments
+/// * `input_path` - Path to the ZIP file
+///
+/// # Returns
+/// * A string representing the encryption method: "aes256", "zipcrypto", or "none"
+///
+/// # Raises
+/// * `IOError` - If file operations fail
+#[pyfunction]
+#[pyo3(signature = (input_path,))]
+pub fn detect_encryption(input_path: &str) -> PyResult<String> {
+    let path = Path::new(input_path);
+    let method = crate::compression::detect_encryption(path)?;
+
+    Ok(match method {
+        EncryptionMethod::Aes256 => "aes256".to_string(),
+        EncryptionMethod::ZipCrypto => "zipcrypto".to_string(),
+        EncryptionMethod::None => "none".to_string(),
+    })
+}
+
+/// Detect the encryption method from ZIP data in memory.
+///
+/// # Arguments
+/// * `data` - The ZIP archive data as bytes
+///
+/// # Returns
+/// * A string representing the encryption method: "aes256", "zipcrypto", or "none"
+///
+/// # Raises
+/// * `IOError` - If decompression fails
+#[pyfunction]
+#[pyo3(signature = (data,))]
+pub fn detect_encryption_bytes(data: &[u8]) -> PyResult<String> {
+    let method = crate::compression::detect_encryption_bytes(data)?;
+
+    Ok(match method {
+        EncryptionMethod::Aes256 => "aes256".to_string(),
+        EncryptionMethod::ZipCrypto => "zipcrypto".to_string(),
+        EncryptionMethod::None => "none".to_string(),
+    })
+}
+
 /// Compress a single file to a ZIP archive.
 ///
 /// # Arguments

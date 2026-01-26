@@ -11,7 +11,7 @@ use crate::error::{Result, RustyZipError};
 use glob::Pattern;
 use rayon::prelude::*;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::Path;
 use std::sync::OnceLock;
 use walkdir::WalkDir;

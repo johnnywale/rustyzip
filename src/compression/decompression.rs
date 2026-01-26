@@ -3,12 +3,78 @@
 use super::security::{
     validate_output_path, DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_DECOMPRESSED_SIZE,
 };
+use super::types::EncryptionMethod;
 use crate::error::{Result, RustyZipError};
 use filetime::FileTime;
 use std::fs::{self, File};
 use std::io::{Cursor, Read};
 use std::path::Path;
 use zip::ZipArchive;
+
+/// Detect the encryption method used in a ZIP file.
+///
+/// This function examines the ZIP archive and returns the encryption method
+/// used for the first encrypted file found. If no files are encrypted,
+/// returns `EncryptionMethod::None`.
+///
+/// # Arguments
+/// * `path` - Path to the ZIP file
+///
+/// # Returns
+/// The detected `EncryptionMethod` (Aes256, ZipCrypto, or None)
+pub fn detect_encryption(path: &Path) -> Result<EncryptionMethod> {
+    if !path.exists() {
+        return Err(RustyZipError::FileNotFound(path.display().to_string()));
+    }
+
+    let file = File::open(path)?;
+    let archive = ZipArchive::new(file)?;
+    detect_encryption_from_archive(archive)
+}
+
+/// Detect the encryption method from ZIP data in memory.
+///
+/// # Arguments
+/// * `data` - The ZIP archive data as bytes
+///
+/// # Returns
+/// The detected `EncryptionMethod` (Aes256, ZipCrypto, or None)
+pub fn detect_encryption_bytes(data: &[u8]) -> Result<EncryptionMethod> {
+    let cursor = Cursor::new(data);
+    let archive = ZipArchive::new(cursor)?;
+    detect_encryption_from_archive(archive)
+}
+
+/// Internal function to detect encryption from a ZipArchive
+fn detect_encryption_from_archive<R: Read + std::io::Seek>(
+    mut archive: ZipArchive<R>,
+) -> Result<EncryptionMethod> {
+    for i in 0..archive.len() {
+        // Use by_index_raw to access file metadata without requiring decryption
+        let file = archive.by_index_raw(i)?;
+
+        // Skip directories
+        if file.is_dir() {
+            continue;
+        }
+
+        // Check if this file is encrypted
+        if file.encrypted() {
+            // Check for AES encryption by looking for AES extra field header (0x9901)
+            // The extra data starts with the header ID in little-endian format
+            if let Some(extra_data) = file.extra_data() {
+                if extra_data.len() >= 2 && extra_data[0] == 0x01 && extra_data[1] == 0x99 {
+                    return Ok(EncryptionMethod::Aes256);
+                }
+            }
+            // Encrypted but no AES header = ZipCrypto
+            return Ok(EncryptionMethod::ZipCrypto);
+        }
+    }
+
+    // No encrypted files found
+    Ok(EncryptionMethod::None)
+}
 
 /// Decompress a ZIP archive
 ///
