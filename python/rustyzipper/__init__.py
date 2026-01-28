@@ -46,6 +46,21 @@ from . import rustyzip as _rust
 
 
 __version__ = _rust.__version__
+
+# Import ErrorCode enum from Rust
+ErrorCode = _rust.ErrorCode
+
+# Import exception classes from Rust module
+RustyZipException = _rust.RustyZipException
+InvalidPasswordException = _rust.InvalidPasswordException
+FileNotFoundException = _rust.FileNotFoundException
+UnsupportedEncryptionException = _rust.UnsupportedEncryptionException
+PathTraversalException = _rust.PathTraversalException
+ZipBombException = _rust.ZipBombException
+SecurityException = _rust.SecurityException
+CompressionException = _rust.CompressionException
+DecompressionException = _rust.DecompressionException
+
 __all__ = [
     # File-based compression
     "compress_file",
@@ -71,6 +86,18 @@ __all__ = [
     # Enums
     "EncryptionMethod",
     "CompressionLevel",
+    "ErrorCode",
+    # Exceptions (from Rust)
+    "RustyZipException",
+    "InvalidPasswordException",
+    "FileNotFoundException",
+    "UnsupportedEncryptionException",
+    "PathTraversalException",
+    "ZipBombException",
+    "SecurityException",
+    "CompressionException",
+    "DecompressionException",
+    # Version
     "__version__",
 ]
 

@@ -25,6 +25,10 @@ from rustyzipper import (
     EncryptionMethod,
     CompressionLevel,
     SecurityPolicy,
+    # Exceptions from Rust
+    RustyZipException,
+    InvalidPasswordException,
+    FileNotFoundException,
 )
 
 
@@ -112,7 +116,7 @@ class TestCompressFile:
         """Test compression of non-existent file."""
         output = os.path.join(temp_dir, "output.zip")
 
-        with pytest.raises(IOError):
+        with pytest.raises(FileNotFoundException):
             compress_file("nonexistent.txt", output)
 
     def test_compression_levels(self, temp_dir, sample_file):
@@ -165,14 +169,14 @@ class TestDecompressFile:
 
         compress_file(sample_file, zip_file, password="correct")
 
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(InvalidPasswordException):
             decompress_file(zip_file, extract_dir, password="wrong")
 
     def test_decompress_file_not_found(self, temp_dir):
         """Test decompression of non-existent file."""
         extract_dir = os.path.join(temp_dir, "extracted")
 
-        with pytest.raises(IOError):
+        with pytest.raises(FileNotFoundException):
             decompress_file("nonexistent.zip", extract_dir)
 
     def test_decompress_preserves_timestamp(self, temp_dir, sample_file):
@@ -531,7 +535,7 @@ class TestDecompressBytes:
 
         zip_data = compress_bytes(original_files, password="correct_password")
 
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(InvalidPasswordException):
             decompress_bytes(zip_data, password="wrong_password")
 
     def test_decompress_empty_file(self):
@@ -801,7 +805,7 @@ class TestDecompressStream:
         zip_data = compress_bytes(original, password="correct")
 
         input_stream = io.BytesIO(zip_data)
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(InvalidPasswordException):
             decompress_stream(input_stream, password="wrong")
 
     def test_decompress_stream_from_file(self, temp_dir):
@@ -1731,6 +1735,7 @@ class TestDecompressBytesWithPolicy:
         assert result[0] == ("test.txt", b"Secret content")
 
 
+@pytest.mark.slow
 class TestLargeBinaryEncryption:
     """Tests for large binary encryption/decryption across all APIs."""
 

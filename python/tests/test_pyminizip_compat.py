@@ -10,6 +10,11 @@ import pytest
 
 from rustyzipper.compat import pyminizip
 import rustyzipper
+from rustyzipper import (
+    RustyZipException,
+    InvalidPasswordException,
+    FileNotFoundException,
+)
 
 
 @pytest.fixture
@@ -181,7 +186,7 @@ class TestPyminizipCompat:
 
         pyminizip.compress(sample_file, None, zip_file, "correct", 5)
 
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(InvalidPasswordException):
             pyminizip.uncompress(zip_file, "wrong", extract_dir, 0)
 
     def test_compress_different_levels(self, temp_dir, sample_file):
@@ -422,14 +427,14 @@ class TestErrorHandling:
         """Test that compressing non-existent file raises error."""
         output = os.path.join(temp_dir, "output.zip")
 
-        with pytest.raises(IOError):
+        with pytest.raises(FileNotFoundException):
             pyminizip.compress("/nonexistent/file.txt", None, output, None, 5)
 
     def test_compress_multiple_one_file_not_found(self, temp_dir, sample_file):
         """Test that one missing file in list raises error."""
         output = os.path.join(temp_dir, "output.zip")
 
-        with pytest.raises(IOError):
+        with pytest.raises(FileNotFoundException):
             pyminizip.compress(
                 [sample_file, "/nonexistent/file.txt"],
                 [None, None],
@@ -442,17 +447,17 @@ class TestErrorHandling:
         """Test that extracting non-existent ZIP raises error."""
         extract_dir = os.path.join(temp_dir, "extracted")
 
-        with pytest.raises(IOError):
+        with pytest.raises(FileNotFoundException):
             pyminizip.uncompress("/nonexistent/archive.zip", None, extract_dir, 0)
 
     def test_uncompress_wrong_password(self, temp_dir, sample_file):
-        """Test that wrong password raises ValueError."""
+        """Test that wrong password raises InvalidPasswordException."""
         zip_file = os.path.join(temp_dir, "encrypted.zip")
         extract_dir = os.path.join(temp_dir, "extracted")
 
         pyminizip.compress(sample_file, None, zip_file, "correct", 5)
 
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(InvalidPasswordException):
             pyminizip.uncompress(zip_file, "wrong", extract_dir, 0)
 
     def test_uncompress_no_password_on_encrypted(self, temp_dir, sample_file):
@@ -462,7 +467,7 @@ class TestErrorHandling:
 
         pyminizip.compress(sample_file, None, zip_file, "secret", 5)
 
-        with pytest.raises((ValueError, IOError)):
+        with pytest.raises(RustyZipException):
             pyminizip.uncompress(zip_file, None, extract_dir, 0)
 
     def test_compress_invalid_output_path(self, temp_dir, sample_file):
@@ -470,7 +475,7 @@ class TestErrorHandling:
         # Try to write to a non-existent directory
         output = "/nonexistent/directory/output.zip"
 
-        with pytest.raises(IOError):
+        with pytest.raises(RustyZipException):
             pyminizip.compress(sample_file, None, output, None, 5)
 
 
@@ -885,6 +890,7 @@ class TestSecurityParameters:
             assert os.path.exists(os.path.join(extract_dir, f"file{i}.txt"))
 
 
+@pytest.mark.slow
 class TestLargeBinaryCompatAPI:
     """Tests for large binary encryption/decryption using pyminizip compat API."""
 

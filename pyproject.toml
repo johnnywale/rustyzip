@@ -57,6 +57,9 @@ module-name = "rustyzipper.rustyzip"
 testpaths = ["python/tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (run with '--run-slow')",
+]
 
 [tool.black]
 line-length = 100

@@ -1,6 +1,7 @@
-use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 use thiserror::Error;
+
+use crate::bindings::exceptions::to_py_err;
 
 /// Custom error types for RustyZip operations
 #[derive(Debug, Error)]
@@ -45,21 +46,7 @@ pub enum RustyZipError {
 
 impl From<RustyZipError> for PyErr {
     fn from(err: RustyZipError) -> PyErr {
-        match &err {
-            RustyZipError::Io(_) => PyIOError::new_err(err.to_string()),
-            RustyZipError::Zip(_) => PyIOError::new_err(err.to_string()),
-            RustyZipError::FileNotFound(_) => PyIOError::new_err(err.to_string()),
-            RustyZipError::InvalidPassword => PyValueError::new_err(err.to_string()),
-            RustyZipError::UnsupportedEncryption(_) => PyValueError::new_err(err.to_string()),
-            RustyZipError::InvalidPath(_) => PyValueError::new_err(err.to_string()),
-            RustyZipError::PatternError(_) => PyValueError::new_err(err.to_string()),
-            RustyZipError::WalkDirError(_) => PyIOError::new_err(err.to_string()),
-            RustyZipError::PathTraversal(_) => PyValueError::new_err(err.to_string()),
-            RustyZipError::ZipBomb(_, _) => PyValueError::new_err(err.to_string()),
-            RustyZipError::SuspiciousCompressionRatio(_, _) => {
-                PyValueError::new_err(err.to_string())
-            }
-        }
+        to_py_err(err)
     }
 }
 
