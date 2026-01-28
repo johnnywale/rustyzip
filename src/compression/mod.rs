@@ -42,7 +42,6 @@ pub use streaming::{
 };
 
 // Re-export utility functions needed by other modules
-pub(crate) use utils::system_time_to_zip_datetime;
 
 /// Compress multiple files to a ZIP archive
 ///

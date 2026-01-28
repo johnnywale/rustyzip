@@ -1,12 +1,14 @@
 # Makefile for rustyzipper
 
-.PHONY: all venv install dev build test test-verbose clean help
+.PHONY: all venv install dev build test test-verbose clean help \
+       docs-install docs-serve docs-build docs-clean
 
 # Default Python and venv paths
 VENV := .venv
 PYTHON := $(VENV)/Scripts/python
 MATURIN := $(VENV)/Scripts/maturin
 PYTEST := $(VENV)/Scripts/pytest
+MKDOCS := $(VENV)/Scripts/mkdocs
 
 # Export for maturin
 export VIRTUAL_ENV := $(CURDIR)/$(VENV)
@@ -60,6 +62,7 @@ clean:
 	-rm -rf .pytest_cache
 	-rm -rf python/rustyzipper/__pycache__
 	-rm -rf python/tests/__pycache__
+	-rm -rf site
 
 # Format code
 fmt:
@@ -72,6 +75,26 @@ lint:
 # Run Rust tests
 test-rust:
 	cargo test
+
+# -------------------------
+# Documentation
+# -------------------------
+
+# Install documentation dependencies
+docs-install: venv
+	$(PYTHON) -m pip install mkdocs-material mkdocstrings[python] pymdown-extensions
+
+# Serve documentation locally (with live reload)
+docs-serve: docs-install
+	$(MKDOCS) serve
+
+# Build documentation
+docs-build: docs-install
+	$(MKDOCS) build --strict
+
+# Clean built documentation
+docs-clean:
+	-rm -rf site
 
 # Help
 help:
@@ -89,4 +112,11 @@ help:
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make fmt          - Format Rust code"
 	@echo "  make lint         - Lint Rust code"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  make docs-install - Install docs dependencies"
+	@echo "  make docs-serve   - Serve docs locally (http://127.0.0.1:8000)"
+	@echo "  make docs-build   - Build static documentation"
+	@echo "  make docs-clean   - Clean built documentation"
+	@echo ""
 	@echo "  make help         - Show this help"

@@ -3,12 +3,14 @@
 //! This module contains all the Python-facing functions and classes.
 
 mod compat;
+pub mod exceptions;
 mod file_ops;
 mod memory_ops;
 mod streaming;
 
 // Re-export all Python bindings
 pub use compat::{compress, uncompress};
+pub use exceptions::register_exceptions;
 pub use file_ops::{
     compress_directory, compress_file, compress_files, decompress_file, detect_encryption,
     detect_encryption_bytes,

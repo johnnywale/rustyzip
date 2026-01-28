@@ -8,4 +8,4 @@ mod reader;
 mod writer;
 
 pub use reader::{PyReadSeeker, PyReader};
-pub use writer::{PyWriteSeeker, PyWriter};
+pub use writer::PyWriteSeeker;

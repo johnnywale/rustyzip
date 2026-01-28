@@ -17,6 +17,9 @@ use pyo3::prelude::*;
 /// RustyZip Python module
 #[pymodule]
 fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Register exceptions and ErrorCode enum first
+    bindings::register_exceptions(m)?;
+
     // File operations
     m.add_function(wrap_pyfunction!(bindings::compress_file, m)?)?;
     m.add_function(wrap_pyfunction!(bindings::compress_files, m)?)?;
