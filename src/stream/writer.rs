@@ -32,7 +32,7 @@ impl Write for PyWriter<'_> {
         let result = self
             .file
             .call_method1("write", (py_bytes,))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         // Get number of bytes written (Python's write returns the count)
         let bytes_written: usize = result
@@ -47,7 +47,7 @@ impl Write for PyWriter<'_> {
         if self.file.hasattr("flush").unwrap_or(false) {
             self.file
                 .call_method0("flush")
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| io::Error::other(e.to_string()))?;
         }
         Ok(())
     }
@@ -94,7 +94,7 @@ impl Seek for PyWriteSeeker<'_> {
             .writer
             .file
             .call_method1("seek", (offset, whence))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         let new_pos: u64 = result
             .extract()

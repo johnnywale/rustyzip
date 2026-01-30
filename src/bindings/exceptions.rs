@@ -141,18 +141,12 @@ pub fn to_py_err(err: RustyZipError) -> PyErr {
     let message = err.to_string();
 
     match err {
-        RustyZipError::InvalidPassword => {
-            InvalidPasswordException::new_err((message, code as i32))
-        }
-        RustyZipError::FileNotFound(_) => {
-            FileNotFoundException::new_err((message, code as i32))
-        }
+        RustyZipError::InvalidPassword => InvalidPasswordException::new_err((message, code as i32)),
+        RustyZipError::FileNotFound(_) => FileNotFoundException::new_err((message, code as i32)),
         RustyZipError::UnsupportedEncryption(_) => {
             UnsupportedEncryptionException::new_err((message, code as i32))
         }
-        RustyZipError::PathTraversal(_) => {
-            PathTraversalException::new_err((message, code as i32))
-        }
+        RustyZipError::PathTraversal(_) => PathTraversalException::new_err((message, code as i32)),
         RustyZipError::ZipBomb(_, _) | RustyZipError::SuspiciousCompressionRatio(_, _) => {
             ZipBombException::new_err((message, code as i32))
         }
@@ -196,10 +190,7 @@ pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.py().get_type::<PathTraversalException>(),
     )?;
     m.add("ZipBombException", m.py().get_type::<ZipBombException>())?;
-    m.add(
-        "SecurityException",
-        m.py().get_type::<SecurityException>(),
-    )?;
+    m.add("SecurityException", m.py().get_type::<SecurityException>())?;
 
     Ok(())
 }

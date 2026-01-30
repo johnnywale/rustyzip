@@ -3,9 +3,10 @@
 use crate::error::{Result, RustyZipError};
 
 /// Encryption method for password-protected archives
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum EncryptionMethod {
     /// AES-256 encryption (strong, requires 7-Zip/WinRAR to open)
+    #[default]
     Aes256,
     /// ZipCrypto encryption (weak, Windows Explorer compatible)
     ZipCrypto,
@@ -13,13 +14,12 @@ pub enum EncryptionMethod {
     None,
 }
 
-impl Default for EncryptionMethod {
-    fn default() -> Self {
-        EncryptionMethod::Aes256
-    }
-}
-
 impl EncryptionMethod {
+    /// Parse encryption method from string.
+    ///
+    /// # Errors
+    /// Returns an error if the string doesn't match a known encryption method.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "aes256" | "aes" | "aes-256" => Ok(EncryptionMethod::Aes256),

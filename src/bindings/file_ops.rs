@@ -124,6 +124,7 @@ pub fn compress_file(
 #[pyfunction]
 #[pyo3(signature = (input_paths, prefixes, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
 #[allow(deprecated)] // allow_threads is deprecated but works correctly
+#[allow(clippy::too_many_arguments)]
 pub fn compress_files(
     py: Python<'_>,
     input_paths: Vec<String>,
