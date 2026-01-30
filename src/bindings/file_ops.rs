@@ -7,14 +7,17 @@ use std::path::Path;
 
 /// Detect the encryption method used in a ZIP file.
 ///
-/// This function examines the ZIP archive and returns the encryption method
-/// used. Returns "aes256", "zipcrypto", or "none".
+/// This function examines ALL files in the ZIP archive and returns:
+/// - "aes256" if all encrypted files use AES-256
+/// - "zipcrypto" if all encrypted files use ZipCrypto
+/// - "none" if no files are encrypted
+/// - "mixed" if files use different encryption methods (including partially encrypted)
 ///
 /// # Arguments
 /// * `input_path` - Path to the ZIP file
 ///
 /// # Returns
-/// * A string representing the encryption method: "aes256", "zipcrypto", or "none"
+/// * A string representing the encryption method
 ///
 /// # Raises
 /// * `IOError` - If file operations fail
@@ -28,16 +31,23 @@ pub fn detect_encryption(input_path: &str) -> PyResult<String> {
         EncryptionMethod::Aes256 => "aes256".to_string(),
         EncryptionMethod::ZipCrypto => "zipcrypto".to_string(),
         EncryptionMethod::None => "none".to_string(),
+        EncryptionMethod::Mixed => "mixed".to_string(),
     })
 }
 
 /// Detect the encryption method from ZIP data in memory.
 ///
+/// This function examines ALL files in the ZIP archive and returns:
+/// - "aes256" if all encrypted files use AES-256
+/// - "zipcrypto" if all encrypted files use ZipCrypto
+/// - "none" if no files are encrypted
+/// - "mixed" if files use different encryption methods (including partially encrypted)
+///
 /// # Arguments
 /// * `data` - The ZIP archive data as bytes
 ///
 /// # Returns
-/// * A string representing the encryption method: "aes256", "zipcrypto", or "none"
+/// * A string representing the encryption method
 ///
 /// # Raises
 /// * `IOError` - If decompression fails
@@ -50,6 +60,7 @@ pub fn detect_encryption_bytes(data: &[u8]) -> PyResult<String> {
         EncryptionMethod::Aes256 => "aes256".to_string(),
         EncryptionMethod::ZipCrypto => "zipcrypto".to_string(),
         EncryptionMethod::None => "none".to_string(),
+        EncryptionMethod::Mixed => "mixed".to_string(),
     })
 }
 

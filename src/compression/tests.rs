@@ -2600,3 +2600,63 @@ fn test_detect_encryption_multiple_files() {
     let method = detect_encryption_bytes(&zip_data).unwrap();
     assert_eq!(method, EncryptionMethod::Aes256);
 }
+
+#[test]
+fn test_detect_encryption_mixed_encrypted_unencrypted() {
+    use crate::compression::add_to_archive_bytes;
+
+    // Start with an unencrypted file
+    let files = vec![("unencrypted.txt", b"Plain text".as_slice())];
+    let zip_data = compress_bytes(
+        &files,
+        None,
+        EncryptionMethod::None,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Add an encrypted file to the same archive
+    let encrypted_files = vec![(b"Secret data".as_slice(), "encrypted.txt")];
+    let mixed_zip = add_to_archive_bytes(
+        &zip_data,
+        &encrypted_files,
+        Some("password"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Should detect Mixed since some files are encrypted and some are not
+    let method = detect_encryption_bytes(&mixed_zip).unwrap();
+    assert_eq!(method, EncryptionMethod::Mixed);
+}
+
+#[test]
+fn test_detect_encryption_mixed_aes_and_zipcrypto() {
+    use crate::compression::add_to_archive_bytes;
+
+    // Start with AES256 encrypted file
+    let files = vec![("aes_file.txt", b"AES encrypted".as_slice())];
+    let zip_data = compress_bytes(
+        &files,
+        Some("password"),
+        EncryptionMethod::Aes256,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Add a ZipCrypto encrypted file to the same archive
+    let zipcrypto_files = vec![(b"ZipCrypto encrypted".as_slice(), "zipcrypto_file.txt")];
+    let mixed_zip = add_to_archive_bytes(
+        &zip_data,
+        &zipcrypto_files,
+        Some("password"),
+        EncryptionMethod::ZipCrypto,
+        CompressionLevel::DEFAULT,
+    )
+    .unwrap();
+
+    // Should detect Mixed since files use different encryption methods
+    let method = detect_encryption_bytes(&mixed_zip).unwrap();
+    assert_eq!(method, EncryptionMethod::Mixed);
+}

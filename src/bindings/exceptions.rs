@@ -106,6 +106,7 @@ impl From<&RustyZipError> for ErrorCode {
             RustyZipError::PathTraversal(_) => ErrorCode::PathTraversal,
             RustyZipError::ZipBomb(_, _) => ErrorCode::ZipBombDetected,
             RustyZipError::SuspiciousCompressionRatio(_, _) => ErrorCode::SuspiciousRatio,
+            RustyZipError::SymlinkNotAllowed(_) => ErrorCode::SymlinkNotAllowed,
         }
     }
 }
@@ -150,6 +151,7 @@ pub fn to_py_err(err: RustyZipError) -> PyErr {
         RustyZipError::ZipBomb(_, _) | RustyZipError::SuspiciousCompressionRatio(_, _) => {
             ZipBombException::new_err((message, code as i32))
         }
+        RustyZipError::SymlinkNotAllowed(_) => SecurityException::new_err((message, code as i32)),
         RustyZipError::Io(_)
         | RustyZipError::Zip(_)
         | RustyZipError::InvalidPath(_)

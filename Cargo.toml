@@ -39,6 +39,12 @@ walkdir = "2"
 # Glob pattern matching
 glob = "0.3"
 
+# Windows path handling (removes \\?\ prefix from canonicalized paths)
+dunce = "1.0"
+
+# Atomic file operations with auto-cleanup on drop
+tempfile = "3"
+
 # Parallel processing (optional)
 rayon = { version = "1.10", optional = true }
 
@@ -58,7 +64,7 @@ pyo3 = { version = "0.27", features = [
 
 
 [dev-dependencies]
-tempfile = "3"
+# Tests use tempfile directly via the crate (already in dependencies)
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -7,21 +7,78 @@ use super::types::EncryptionMethod;
 use crate::error::{Result, RustyZipError};
 use filetime::FileTime;
 use std::fs::{self, File};
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use std::path::Path;
 use zip::ZipArchive;
 
+// =============================================================================
+// Bounded Copy (Disk Exhaustion Protection)
+// =============================================================================
+
+/// Copy bytes from reader to writer with a hard limit.
+///
+/// This function protects against "lying header" ZIP bombs where the declared
+/// size in the ZIP header is small but the actual decompressed data is huge.
+/// Unlike `std::io::copy`, this function **stops immediately** when the limit
+/// is reached, preventing disk exhaustion attacks.
+///
+/// # Arguments
+/// * `reader` - Source to read from
+/// * `writer` - Destination to write to
+/// * `limit` - Maximum number of bytes to copy
+///
+/// # Returns
+/// * `Ok(bytes_written)` if copy completed within limit
+/// * `Err(ZipBomb)` if limit was exceeded
+fn bounded_copy<R: Read, W: Write>(reader: &mut R, writer: &mut W, limit: u64) -> Result<u64> {
+    const BUFFER_SIZE: usize = 64 * 1024; // 64 KB buffer
+    let mut buffer = [0u8; BUFFER_SIZE];
+    let mut total_written: u64 = 0;
+
+    loop {
+        // Calculate how much we can still read without exceeding the limit
+        let remaining = limit.saturating_sub(total_written);
+        if remaining == 0 {
+            // We've hit the limit - check if there's more data
+            // Try to read one more byte to detect if the stream has more
+            let mut probe = [0u8; 1];
+            if reader.read(&mut probe)? > 0 {
+                // There's more data - this is a ZIP bomb
+                return Err(RustyZipError::ZipBomb(total_written + 1, limit));
+            }
+            // Stream ended exactly at limit - that's fine
+            break;
+        }
+
+        // Read up to buffer size or remaining quota, whichever is smaller
+        let to_read = std::cmp::min(BUFFER_SIZE as u64, remaining) as usize;
+        let bytes_read = reader.read(&mut buffer[..to_read])?;
+
+        if bytes_read == 0 {
+            // End of stream
+            break;
+        }
+
+        writer.write_all(&buffer[..bytes_read])?;
+        total_written += bytes_read as u64;
+    }
+
+    Ok(total_written)
+}
+
 /// Detect the encryption method used in a ZIP file.
 ///
-/// This function examines the ZIP archive and returns the encryption method
-/// used for the first encrypted file found. If no files are encrypted,
-/// returns `EncryptionMethod::None`.
+/// This function examines ALL files in the ZIP archive and returns:
+/// - `EncryptionMethod::None` if no files are encrypted
+/// - `EncryptionMethod::Aes256` if all encrypted files use AES-256
+/// - `EncryptionMethod::ZipCrypto` if all encrypted files use ZipCrypto
+/// - `EncryptionMethod::Mixed` if files use different encryption methods
 ///
 /// # Arguments
 /// * `path` - Path to the ZIP file
 ///
 /// # Returns
-/// The detected `EncryptionMethod` (Aes256, ZipCrypto, or None)
+/// The detected `EncryptionMethod`
 pub fn detect_encryption(path: &Path) -> Result<EncryptionMethod> {
     if !path.exists() {
         return Err(RustyZipError::FileNotFound(path.display().to_string()));
@@ -34,21 +91,53 @@ pub fn detect_encryption(path: &Path) -> Result<EncryptionMethod> {
 
 /// Detect the encryption method from ZIP data in memory.
 ///
+/// This function examines ALL files in the ZIP archive and returns:
+/// - `EncryptionMethod::None` if no files are encrypted
+/// - `EncryptionMethod::Aes256` if all encrypted files use AES-256
+/// - `EncryptionMethod::ZipCrypto` if all encrypted files use ZipCrypto
+/// - `EncryptionMethod::Mixed` if files use different encryption methods
+///
 /// # Arguments
 /// * `data` - The ZIP archive data as bytes
 ///
 /// # Returns
-/// The detected `EncryptionMethod` (Aes256, ZipCrypto, or None)
+/// The detected `EncryptionMethod`
 pub fn detect_encryption_bytes(data: &[u8]) -> Result<EncryptionMethod> {
     let cursor = Cursor::new(data);
     let archive = ZipArchive::new(cursor)?;
     detect_encryption_from_archive(archive)
 }
 
-/// Internal function to detect encryption from a ZipArchive
+/// Detect the encryption method for a single file entry.
+/// Returns None for unencrypted files.
+fn detect_single_file_encryption<R: Read>(
+    file: &zip::read::ZipFile<'_, R>,
+) -> Option<EncryptionMethod> {
+    if !file.encrypted() {
+        return None;
+    }
+
+    // Check for AES encryption by looking for AES extra field header (0x9901)
+    // The extra data starts with the header ID in little-endian format
+    if let Some(extra_data) = file.extra_data() {
+        if extra_data.len() >= 2 && extra_data[0] == 0x01 && extra_data[1] == 0x99 {
+            return Some(EncryptionMethod::Aes256);
+        }
+    }
+
+    // Encrypted but no AES header = ZipCrypto
+    Some(EncryptionMethod::ZipCrypto)
+}
+
+/// Internal function to detect encryption from a ZipArchive.
+/// Scans all files and returns Mixed if inconsistent methods are detected.
 fn detect_encryption_from_archive<R: Read + std::io::Seek>(
     mut archive: ZipArchive<R>,
 ) -> Result<EncryptionMethod> {
+    let mut found_aes = false;
+    let mut found_zipcrypto = false;
+    let mut found_unencrypted = false;
+
     for i in 0..archive.len() {
         // Use by_index_raw to access file metadata without requiring decryption
         let file = archive.by_index_raw(i)?;
@@ -58,22 +147,30 @@ fn detect_encryption_from_archive<R: Read + std::io::Seek>(
             continue;
         }
 
-        // Check if this file is encrypted
-        if file.encrypted() {
-            // Check for AES encryption by looking for AES extra field header (0x9901)
-            // The extra data starts with the header ID in little-endian format
-            if let Some(extra_data) = file.extra_data() {
-                if extra_data.len() >= 2 && extra_data[0] == 0x01 && extra_data[1] == 0x99 {
-                    return Ok(EncryptionMethod::Aes256);
-                }
-            }
-            // Encrypted but no AES header = ZipCrypto
-            return Ok(EncryptionMethod::ZipCrypto);
+        match detect_single_file_encryption(&file) {
+            Some(EncryptionMethod::Aes256) => found_aes = true,
+            Some(EncryptionMethod::ZipCrypto) => found_zipcrypto = true,
+            None => found_unencrypted = true,
+            _ => {} // Mixed won't be returned from detect_single_file_encryption
+        }
+
+        // Early exit if we already know it's mixed
+        if found_aes && found_zipcrypto {
+            return Ok(EncryptionMethod::Mixed);
         }
     }
 
-    // No encrypted files found
-    Ok(EncryptionMethod::None)
+    // Determine result based on what we found
+    match (found_aes, found_zipcrypto, found_unencrypted) {
+        // Pure encryption types
+        (true, false, false) => Ok(EncryptionMethod::Aes256),
+        (false, true, false) => Ok(EncryptionMethod::ZipCrypto),
+        (false, false, _) => Ok(EncryptionMethod::None),
+        // Mixed: different encryption types found
+        (true, true, _) => Ok(EncryptionMethod::Mixed),
+        // Mixed: some files encrypted, some not - this is also considered mixed
+        (true, false, true) | (false, true, true) => Ok(EncryptionMethod::Mixed),
+    }
 }
 
 /// Decompress a ZIP archive
@@ -160,22 +257,42 @@ pub fn decompress_file_with_limits(
             continue;
         }
 
-        // Check uncompressed size before extraction (ZIP bomb early detection)
-        let uncompressed_size = file.size();
-        total_decompressed = total_decompressed.saturating_add(uncompressed_size);
-
-        // Check total size limit
-        if total_decompressed > max_size {
-            return Err(RustyZipError::ZipBomb(total_decompressed, max_size));
+        // === SYMLINK HANDLING ===
+        // Check if this is a symlink entry (Unix mode with S_IFLNK flag: 0o120000)
+        // NOTE: This check runs on ALL platforms, not just Unix. A ZIP created on Unix
+        // may contain symlinks, and we need to detect and skip them even on Windows
+        // to prevent security issues. Without this check, a Windows build would extract
+        // symlinks as plain text files containing the target path, which could be confusing
+        // or exploited in certain scenarios.
+        if let Some(mode) = file.unix_mode() {
+            const S_IFLNK: u32 = 0o120000;
+            if (mode & 0o170000) == S_IFLNK {
+                // This is a symlink - skip it for security
+                // Symlinks could point to arbitrary locations
+                log::debug!("Skipping symlink entry: {}", file.name());
+                continue;
+            }
         }
 
-        // Check compression ratio (if compressed size is known and non-zero)
+        // === ZIP BOMB PROTECTION (PRE-CHECK) ===
+        // Check declared size and compression ratio BEFORE extraction
+        let declared_size = file.size();
         let file_compressed_size = file.compressed_size();
+
+        // Early ratio check based on declared sizes
         if file_compressed_size > 0 {
-            let ratio = uncompressed_size / file_compressed_size;
+            let ratio = declared_size / file_compressed_size;
             if ratio > max_ratio {
                 return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
             }
+        }
+
+        // Early size check based on declared size
+        if total_decompressed.saturating_add(declared_size) > max_size {
+            return Err(RustyZipError::ZipBomb(
+                total_decompressed + declared_size,
+                max_size,
+            ));
         }
 
         // Determine output path based on withoutpath flag
@@ -203,21 +320,41 @@ pub fn decompress_file_with_limits(
             }
         }
 
-        // Create output file and copy with size tracking
-        let mut outfile = File::create(&outpath)?;
-        let bytes_written = std::io::copy(&mut file, &mut outfile)?;
+        // === BOUNDED EXTRACTION (CRITICAL SECURITY) ===
+        // Calculate the maximum bytes we can write for this file
+        // This is the smaller of:
+        // 1. The remaining quota (max_size - total_decompressed)
+        // 2. A generous multiple of declared size to allow for header lies
+        let remaining_quota = max_size.saturating_sub(total_decompressed);
+        // Allow up to 10x declared size or remaining quota, whichever is smaller
+        // This catches "lying header" bombs while allowing legitimate files
+        let file_limit = std::cmp::min(
+            remaining_quota,
+            declared_size.saturating_mul(10).saturating_add(1024 * 1024), // declared * 10 + 1MB
+        );
 
-        // Verify actual size matches declared size (additional ZIP bomb check)
-        if bytes_written > uncompressed_size {
-            // File was larger than declared - update total
-            total_decompressed = total_decompressed
-                .saturating_sub(uncompressed_size)
-                .saturating_add(bytes_written);
-            if total_decompressed > max_size {
-                // Clean up the file we just wrote
+        // Create output file
+        let mut outfile = File::create(&outpath)?;
+
+        // Use bounded_copy to prevent disk exhaustion
+        // This stops IMMEDIATELY if limit is exceeded, not after filling the disk
+        let bytes_written = match bounded_copy(&mut file, &mut outfile, file_limit) {
+            Ok(written) => written,
+            Err(e) => {
+                // Clean up the partial file on error
+                drop(outfile); // Close file handle first
                 let _ = fs::remove_file(&outpath);
-                return Err(RustyZipError::ZipBomb(total_decompressed, max_size));
+                return Err(e);
             }
+        };
+
+        // Update total with actual bytes written
+        total_decompressed = total_decompressed.saturating_add(bytes_written);
+
+        // Final size check (should not fail due to bounded_copy, but be defensive)
+        if total_decompressed > max_size {
+            let _ = fs::remove_file(&outpath);
+            return Err(RustyZipError::ZipBomb(total_decompressed, max_size));
         }
 
         // Set file modification time to match the original
@@ -308,41 +445,55 @@ pub fn decompress_bytes_with_limits(
             continue;
         }
 
-        // Check uncompressed size before extraction (ZIP bomb early detection)
-        let uncompressed_size = file.size();
-        total_decompressed = total_decompressed.saturating_add(uncompressed_size);
-
-        // Check total size limit
-        if total_decompressed > max_size {
-            return Err(RustyZipError::ZipBomb(total_decompressed, max_size));
+        // Skip symlinks (check Unix mode if available)
+        // NOTE: Check runs on all platforms to detect symlinks from Unix-created ZIPs
+        if let Some(mode) = file.unix_mode() {
+            const S_IFLNK: u32 = 0o120000;
+            if (mode & 0o170000) == S_IFLNK {
+                log::debug!("Skipping symlink entry: {}", file.name());
+                continue;
+            }
         }
 
-        // Check compression ratio
+        // === ZIP BOMB PROTECTION (PRE-CHECK) ===
+        let declared_size = file.size();
         let file_compressed_size = file.compressed_size();
+
+        // Early ratio check
         if file_compressed_size > 0 {
-            let ratio = uncompressed_size / file_compressed_size;
+            let ratio = declared_size / file_compressed_size;
             if ratio > max_ratio {
                 return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
             }
         }
 
+        // Early size check
+        if total_decompressed.saturating_add(declared_size) > max_size {
+            return Err(RustyZipError::ZipBomb(
+                total_decompressed + declared_size,
+                max_size,
+            ));
+        }
+
         let name = file.name().to_string();
 
-        // Pre-allocate with declared size, but cap at a reasonable amount
-        let capacity = (uncompressed_size as usize).min(64 * 1024 * 1024); // Cap at 64MB pre-allocation
-        let mut content = Vec::with_capacity(capacity);
-        file.read_to_end(&mut content)?;
+        // === BOUNDED EXTRACTION ===
+        // Calculate the maximum bytes we can read for this file
+        let remaining_quota = max_size.saturating_sub(total_decompressed);
+        let file_limit = std::cmp::min(
+            remaining_quota,
+            declared_size.saturating_mul(10).saturating_add(1024 * 1024),
+        );
 
-        // Verify actual size (in case declared size was wrong)
-        let actual_size = content.len() as u64;
-        if actual_size > uncompressed_size {
-            total_decompressed = total_decompressed
-                .saturating_sub(uncompressed_size)
-                .saturating_add(actual_size);
-            if total_decompressed > max_size {
-                return Err(RustyZipError::ZipBomb(total_decompressed, max_size));
-            }
-        }
+        // Pre-allocate with declared size (capped for sanity)
+        let capacity = std::cmp::min(declared_size as usize, 64 * 1024 * 1024);
+        let mut content = Vec::with_capacity(capacity);
+
+        // Use bounded_copy to read into memory with limit
+        let bytes_read = bounded_copy(&mut file, &mut content, file_limit)?;
+
+        // Update total with actual bytes read
+        total_decompressed = total_decompressed.saturating_add(bytes_read);
 
         results.push((name, content));
     }
