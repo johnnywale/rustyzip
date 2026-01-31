@@ -35,7 +35,7 @@ impl Read for PyReader<'_> {
         let result = self
             .file
             .call_method1("read", (read_size,))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         // Try to cast to PyBytes first for zero-copy access
         #[allow(deprecated)] // downcast is deprecated but cast() has different semantics
@@ -110,7 +110,7 @@ impl Seek for PyReadSeeker<'_> {
             .reader
             .file
             .call_method1("seek", (offset, whence))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         let new_pos: u64 = result
             .extract()

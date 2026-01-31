@@ -134,6 +134,7 @@ pub fn compress(
 #[pyfunction]
 #[pyo3(signature = (src, password, dst, withoutpath, max_size=None, max_ratio=None, allow_symlinks=false))]
 #[allow(deprecated)] // allow_threads is deprecated but works correctly
+#[allow(clippy::too_many_arguments)]
 pub fn uncompress(
     py: Python<'_>,
     src: &str,

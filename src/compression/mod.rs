@@ -2,7 +2,11 @@
 //!
 //! This module provides all compression and decompression functionality.
 
+mod builder;
 mod decompression;
+mod handle;
+mod inspection;
+mod modification;
 mod security;
 mod sequential;
 mod streaming;
@@ -16,19 +20,27 @@ mod parallel;
 mod tests;
 
 // Re-export public types
-pub use types::{CompressionLevel, EncryptionMethod};
+pub use builder::{
+    CompressionBuilder, CompressionProgress, Compressor, HasDirectory, HasFiles, NoInput,
+    ProgressCallback,
+};
+pub use handle::ZipHandle;
+pub use types::{CompressionLevel, DirectoryCompressionOptions, EncryptionMethod, SymlinkHandling};
 
 // Re-export security types, constants and functions
 pub use security::{
-    should_include_file, validate_output_path, Password, SecurityPolicy,
-    DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_DECOMPRESSED_SIZE, DEFAULT_MAX_THREADS,
+    should_include_file, validate_archive, validate_archive_bytes, validate_archive_entry_name,
+    validate_output_path, Password, SecurityPolicy, ValidationIssue, ValidationReport,
+    ValidationSeverity, DEFAULT_MAX_ARCHIVE_SIZE_FOR_MODIFICATION, DEFAULT_MAX_COMPRESSION_RATIO,
+    DEFAULT_MAX_DECOMPRESSED_SIZE, DEFAULT_MAX_THREADS, WINDOWS_RESERVED_CHARS,
+    WINDOWS_RESERVED_NAMES,
 };
 
 // Re-export compression functions
 pub use sequential::{compress_bytes, compress_file};
 
 #[cfg(feature = "parallel")]
-pub use parallel::PARALLEL_FILE_SIZE_THRESHOLD;
+pub use parallel::{ParallelConfig, PARALLEL_FILE_SIZE_THRESHOLD, PARALLEL_MEMORY_LIMIT};
 
 // Re-export decompression functions
 pub use decompression::{
@@ -39,6 +51,24 @@ pub use decompression::{
 // Re-export streaming functions
 pub use streaming::{
     compress_stream, decompress_stream_to_vec, decompress_stream_to_vec_with_limits,
+};
+
+// Re-export inspection functions and types
+pub use inspection::{
+    get_all_file_info, get_all_file_info_bytes, get_archive_info, get_archive_info_bytes,
+    get_file_info, get_file_info_bytes, has_file, has_file_bytes, iter_archive, iter_archive_bytes,
+    list_archive, list_archive_bytes, open_cached, ArchiveInfo, ArchiveIterator, CachedArchive,
+    FileInfo,
+};
+
+// Re-export modification functions
+pub use modification::{
+    add_bytes_to_archive, add_bytes_to_archive_with_policy, add_to_archive, add_to_archive_bytes,
+    add_to_archive_bytes_with_policy, add_to_archive_with_policy, remove_from_archive,
+    remove_from_archive_bytes, remove_from_archive_bytes_with_policy,
+    remove_from_archive_with_policy, rename_in_archive, rename_in_archive_bytes,
+    rename_in_archive_bytes_with_policy, rename_in_archive_with_policy, update_in_archive,
+    update_in_archive_bytes, update_in_archive_bytes_with_policy, update_in_archive_with_policy,
 };
 
 // Re-export utility functions needed by other modules

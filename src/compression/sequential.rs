@@ -52,6 +52,7 @@ pub fn compress_file(
 }
 
 /// Sequential implementation of multi-file compression
+#[allow(dead_code)] // Used when parallel feature is disabled
 pub fn compress_files_sequential(
     input_paths: &[&Path],
     prefixes: &[Option<&str>],
@@ -101,6 +102,7 @@ pub fn compress_files_sequential(
 }
 
 /// Sequential implementation of directory compression
+#[allow(dead_code)] // Used when parallel feature is disabled
 pub fn compress_directory_sequential(
     input_dir: &Path,
     output_path: &Path,

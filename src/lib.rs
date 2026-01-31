@@ -48,6 +48,12 @@ fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bindings::compress, m)?)?;
     m.add_function(wrap_pyfunction!(bindings::uncompress, m)?)?;
 
+    // Archive inspection functions
+    bindings::register_inspection_functions(m)?;
+
+    // Archive modification functions
+    bindings::register_modification_functions(m)?;
+
     // Add version
     m.add("__version__", "1.0.0")?;
 

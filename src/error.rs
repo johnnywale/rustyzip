@@ -42,6 +42,9 @@ pub enum RustyZipError {
 
     #[error("Suspicious compression ratio detected: {0}x (limit: {1}x)")]
     SuspiciousCompressionRatio(u64, u64),
+
+    #[error("Symlink not allowed: {0}")]
+    SymlinkNotAllowed(String),
 }
 
 impl From<RustyZipError> for PyErr {
