@@ -5,10 +5,23 @@
 
 # Default Python and venv paths
 VENV := .venv
-PYTHON := $(VENV)/Scripts/python
-MATURIN := $(VENV)/Scripts/maturin
-PYTEST := $(VENV)/Scripts/pytest
-MKDOCS := $(VENV)/Scripts/mkdocs
+
+# Detect OS and set paths accordingly
+ifeq ($(OS),Windows_NT)
+    PYTHON := $(VENV)/Scripts/python
+    MATURIN := $(VENV)/Scripts/maturin
+    PYTEST := $(VENV)/Scripts/pytest
+    MKDOCS := $(VENV)/Scripts/mkdocs
+    PYTHON_CMD := python
+    CREATE_VENV := if not exist $(VENV) $(PYTHON_CMD) -m venv $(VENV)
+else
+    PYTHON := $(VENV)/bin/python
+    MATURIN := $(VENV)/bin/maturin
+    PYTEST := $(VENV)/bin/pytest
+    MKDOCS := $(VENV)/bin/mkdocs
+    PYTHON_CMD := python3
+    CREATE_VENV := test -d $(VENV) || $(PYTHON_CMD) -m venv $(VENV)
+endif
 
 # Export for maturin
 export VIRTUAL_ENV := $(CURDIR)/$(VENV)
@@ -17,7 +30,7 @@ all: dev test
 
 # Create virtual environment
 venv:
-	@if not exist $(VENV) python -m venv $(VENV)
+	@$(CREATE_VENV)
 
 # Install dependencies
 install: venv
@@ -85,11 +98,11 @@ docs-install: venv
 	$(PYTHON) -m pip install mkdocs-material mkdocstrings[python] pymdown-extensions
 
 # Serve documentation locally (with live reload)
-docs-serve: docs-install
+docs-serve: docs-install dev
 	$(MKDOCS) serve
 
 # Build documentation
-docs-build: docs-install
+docs-build: docs-install dev
 	$(MKDOCS) build --strict
 
 # Clean built documentation
