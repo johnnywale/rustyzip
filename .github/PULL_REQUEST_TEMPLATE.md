@@ -18,8 +18,6 @@ Fixes #(issue number)
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] I have updated the documentation accordingly
-- [ ] I have updated CLAUDE.md if there are architectural changes
-
 ## Testing
 Describe the tests you ran to verify your changes.
 

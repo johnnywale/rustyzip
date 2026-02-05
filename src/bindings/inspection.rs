@@ -25,7 +25,7 @@ use std::path::Path;
 ///     >>> print(f"{info.name}: {info.size} bytes")
 ///     >>> if info.is_encrypted:
 ///     ...     print("File is encrypted")
-#[pyclass(name = "FileInfo", frozen)]
+#[pyclass(name = "FileInfo", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyFileInfo {
     inner: FileInfo,
@@ -138,7 +138,7 @@ impl From<FileInfo> for PyFileInfo {
 ///     >>> print(f"Files: {info.file_count}, Total: {info.total_size} bytes")
 ///     >>> if info.has_encrypted_files:
 ///     ...     print(f"Encryption: {info.encryption}")
-#[pyclass(name = "ArchiveInfo", frozen)]
+#[pyclass(name = "ArchiveInfo", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyArchiveInfo {
     inner: ArchiveInfo,

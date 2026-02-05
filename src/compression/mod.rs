@@ -8,7 +8,7 @@ mod handle;
 mod inspection;
 mod modification;
 mod security;
-mod sequential;
+pub mod sequential;
 mod streaming;
 mod types;
 mod utils;

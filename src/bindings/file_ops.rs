@@ -82,7 +82,6 @@ pub fn detect_encryption_bytes(data: &[u8]) -> PyResult<String> {
 /// * `ValueError` - If parameters are invalid
 #[pyfunction]
 #[pyo3(signature = (input_path, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly; detach has different semantics
 pub fn compress_file(
     py: Python<'_>,
     input_path: &str,
@@ -102,14 +101,14 @@ pub fn compress_file(
         );
     }
 
-    // Convert to owned strings for use in allow_threads closure
+    // Convert to owned strings for use in detach closure
     let input = input_path.to_string();
     let output = output_path.to_string();
     let pwd = password.map(|s| s.to_string());
     let level = CompressionLevel::new(compression_level);
 
     // Release GIL during CPU-intensive compression
-    py.allow_threads(|| {
+    py.detach(|| {
         crate::compression::compress_file(
             Path::new(&input),
             Path::new(&output),
@@ -134,7 +133,6 @@ pub fn compress_file(
 /// * `suppress_warning` - Suppress security warnings for weak encryption
 #[pyfunction]
 #[pyo3(signature = (input_paths, prefixes, output_path, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 #[allow(clippy::too_many_arguments)]
 pub fn compress_files(
     py: Python<'_>,
@@ -156,13 +154,13 @@ pub fn compress_files(
         );
     }
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let output = output_path.to_string();
     let pwd = password.map(|s| s.to_string());
     let level = CompressionLevel::new(compression_level);
 
     // Release GIL during CPU-intensive compression
-    py.allow_threads(|| {
+    py.detach(|| {
         let paths: Vec<std::path::PathBuf> =
             input_paths.iter().map(std::path::PathBuf::from).collect();
         let path_refs: Vec<&Path> = paths.iter().map(|p| p.as_path()).collect();
@@ -198,7 +196,6 @@ pub fn compress_files(
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 #[pyo3(signature = (input_dir, output_path, password=None, encryption="aes256", compression_level=6, include_patterns=None, exclude_patterns=None, suppress_warning=false))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 pub fn compress_directory(
     py: Python<'_>,
     input_dir: &str,
@@ -220,14 +217,14 @@ pub fn compress_directory(
         );
     }
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let input = input_dir.to_string();
     let output = output_path.to_string();
     let pwd = password.map(|s| s.to_string());
     let level = CompressionLevel::new(compression_level);
 
     // Release GIL during CPU-intensive compression
-    py.allow_threads(|| {
+    py.detach(|| {
         crate::compression::compress_directory(
             Path::new(&input),
             Path::new(&output),
@@ -262,7 +259,6 @@ pub fn compress_directory(
 /// * `RustyZipError` - If ZIP bomb limits are exceeded
 #[pyfunction]
 #[pyo3(signature = (input_path, output_path, password=None, withoutpath=false, max_size=None, max_ratio=None))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 pub fn decompress_file(
     py: Python<'_>,
     input_path: &str,
@@ -274,7 +270,7 @@ pub fn decompress_file(
 ) -> PyResult<()> {
     use crate::compression::{DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_DECOMPRESSED_SIZE};
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let input = input_path.to_string();
     let output = output_path.to_string();
     let pwd = password.map(|s| s.to_string());
@@ -292,7 +288,7 @@ pub fn decompress_file(
     };
 
     // Release GIL during CPU-intensive decompression
-    py.allow_threads(|| {
+    py.detach(|| {
         crate::compression::decompress_file_with_limits(
             Path::new(&input),
             Path::new(&output),
