@@ -16,29 +16,70 @@ env:
 
 jobs:
   # -------------------------
-  # Rust tests
+  # Rust tests with coverage
   # -------------------------
   rust-test:
-    name: Rust Tests
+    name: Rust Tests & Coverage
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python (required for pyo3 tests)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dev headers (required for pyo3 linking)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Run Rust tests
-        run: cargo test --verbose
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run Rust tests with coverage
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --workspace --no-report
+          cargo llvm-cov report
+          cargo llvm-cov report --lcov --output-path lcov-rust.info
+
+      - name: Upload Rust coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov-rust.info
+          flags: rust
+          name: rust-coverage
+          fail_ci_if_error: false
 
       - name: Check formatting
         run: cargo fmt --check
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
+
+      - name: Check coverage threshold (100%)
+        run: |
+          COVERAGE=$(cargo llvm-cov report --summary-only 2>/dev/null | grep "TOTAL" | awk '{print $NF}' | sed 's/%//')
+          echo "Rust code coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 100" | bc -l) )); then
+            echo "⚠️  Coverage is below 100% target: $COVERAGE%"
+            echo "Note: Aiming for 100% coverage. Current: $COVERAGE%"
+            # For now, we'll warn but not fail. Remove 'exit 1' once we reach 100%
+            # exit 1
+          else
+            echo "✅ Coverage meets 100% target"
+          fi
 
   # -------------------------
   # Python tests (via maturin)
@@ -78,10 +119,28 @@ jobs:
         run: pip install target/wheels/*.whl
 
       - name: Run Python tests
-        run: pytest -v --import-mode=importlib --cov=rustyzipper --cov-report=xml
+        run: pytest -v --import-mode=importlib --cov=rustyzipper --cov-report=xml --cov-report=term-missing
 
-      - name: Upload coverage to Codecov
+      - name: Upload Python coverage to Codecov
         uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
+          flags: python
+          name: python-coverage
+          fail_ci_if_error: false
+
+      - name: Check Python coverage threshold (100%)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(root.attrib['line-rate'])")
+          COVERAGE_PCT=$(python -c "print(f'{float('$COVERAGE') * 100:.2f}')")
+          echo "Python code coverage: $COVERAGE_PCT%"
+          if (( $(echo "$COVERAGE_PCT < 100" | bc -l) )); then
+            echo "⚠️  Coverage is below 100% target: $COVERAGE_PCT%"
+            echo "Note: Aiming for 100% coverage. Current: $COVERAGE_PCT%"
+            # For now, we'll warn but not fail
+          else
+            echo "✅ Coverage meets 100% target"
+          fi

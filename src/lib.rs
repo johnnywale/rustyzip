@@ -6,7 +6,7 @@
 mod bindings;
 pub mod compression;
 pub mod error;
-mod stream;
+pub mod stream;
 
 // Re-export for internal use
 pub use compression::{CompressionLevel, EncryptionMethod};

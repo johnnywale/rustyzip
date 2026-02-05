@@ -14,10 +14,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Python bindings
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py38"] }
+pyo3 = { version = "0.28", features = ["abi3-py38"] }
 
 # Compression
-zip = { version = "7.0", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
+zip = { version = "7", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
 flate2 = "1"
 
 # File timestamps
@@ -53,10 +53,10 @@ rayon = { version = "1.10", optional = true }
 default = ["parallel"]
 parallel = ["rayon"]
 win-arm64 = ["pyo3/generate-import-lib"]
-
+extension-module = ["pyo3/extension-module"]
 
 [target.'cfg(all(windows, target_arch = "aarch64"))'.dependencies]
-pyo3 = { version = "0.27", features = [
+pyo3 = { version = "0.28", features = [
     "extension-module",
     "abi3-py38",
     "generate-import-lib"
@@ -64,7 +64,8 @@ pyo3 = { version = "0.27", features = [
 
 
 [dev-dependencies]
-# Tests use tempfile directly via the crate (already in dependencies)
+# pyo3 without extension-module for tests that embed Python
+pyo3 = { version = "0.28", features = ["abi3-py38", "auto-initialize"] }
 
 [lints.rust]
 unsafe_code = "forbid"

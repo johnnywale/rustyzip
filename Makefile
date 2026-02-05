@@ -1,7 +1,7 @@
 # Makefile for rustyzipper
 
 .PHONY: all venv install dev build test test-verbose clean help \
-       docs-install docs-serve docs-build docs-clean
+       docs-install docs-serve docs-build docs-clean coverage coverage-rust coverage-html test-error-codes
 
 # Default Python and venv paths
 VENV := .venv
@@ -57,12 +57,48 @@ test-cov:
 	$(PYTHON) -m pip install pytest-cov
 	$(PYTEST) python/tests --cov=rustyzipper --cov-report=term-missing
 
+# Generate Rust code coverage
+coverage-rust:
+	cargo llvm-cov --all-features --workspace --html
+
+
+
+# Generate combined coverage (Rust + Python)
+coverage:
+	@echo "Generating Rust coverage..."
+	cargo llvm-cov --all-features --workspace --lcov --output-path lcov-rust.info
+	@echo ""
+	@echo "Generating Python coverage..."
+	$(PYTHON) -m pip install pytest-cov
+	$(MATURIN) develop
+	$(PYTEST) python/tests --cov=rustyzipper --cov-report=xml --cov-report=term-missing
+	@echo ""
+	@echo "Coverage reports generated:"
+	@echo "  Rust:   lcov-rust.info"
+	@echo "  Python: coverage.xml"
+
+# Generate HTML coverage reports
+coverage-html:
+	@echo "Generating HTML coverage reports..."
+	cargo llvm-cov --all-features --workspace --html
+	$(PYTHON) -m pip install pytest-cov
+	$(MATURIN) develop
+	$(PYTEST) python/tests --cov=rustyzipper --cov-report=html:htmlcov-python
+	@echo ""
+	@echo "Coverage reports generated:"
+	@echo "  Rust:   target/llvm-cov/html/index.html"
+	@echo "  Python: htmlcov-python/index.html"
+
 # Run specific test file
 test-compression:
 	$(PYTEST) python/tests/test_compression.py -v
 
 test-compat:
 	$(PYTEST) python/tests/test_pyminizip_compat.py -v
+
+# Run error code tests
+test-error-codes:
+	$(PYTEST) python/tests/test_error_codes.py -v
 
 # Clean build artifacts
 clean:
@@ -76,6 +112,10 @@ clean:
 	-rm -rf python/rustyzipper/__pycache__
 	-rm -rf python/tests/__pycache__
 	-rm -rf site
+	-rm -rf htmlcov htmlcov-python
+	-rm -rf .coverage coverage.xml
+	-rm -rf lcov*.info
+	-rm -rf *.profraw *.profdata
 
 # Format code
 fmt:
@@ -121,10 +161,16 @@ help:
 	@echo "  make test-cov     - Run tests with coverage"
 	@echo "  make test-compression - Run compression tests only"
 	@echo "  make test-compat  - Run compatibility tests only"
+	@echo "  make test-error-codes - Run error code tests only"
 	@echo "  make test-rust    - Run Rust tests"
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make fmt          - Format Rust code"
 	@echo "  make lint         - Lint Rust code"
+	@echo ""
+	@echo "Coverage:"
+	@echo "  make coverage        - Generate coverage reports (Rust + Python)"
+	@echo "  make coverage-rust   - Generate Rust coverage report"
+	@echo "  make coverage-html   - Generate HTML coverage reports"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs-install - Install docs dependencies"

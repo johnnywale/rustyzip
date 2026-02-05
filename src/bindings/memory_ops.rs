@@ -28,7 +28,6 @@ use pyo3::prelude::*;
 /// ```
 #[pyfunction]
 #[pyo3(signature = (files, password=None, encryption="aes256", compression_level=6, suppress_warning=false))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 pub fn compress_bytes(
     py: Python<'_>,
     files: Vec<(String, Vec<u8>)>,
@@ -47,12 +46,12 @@ pub fn compress_bytes(
         );
     }
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let pwd = password.map(|s| s.to_string());
     let level = CompressionLevel::new(compression_level);
 
     // Release GIL during CPU-intensive compression
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         let file_refs: Vec<(&str, &[u8])> = files
             .iter()
             .map(|(name, data)| (name.as_str(), data.as_slice()))
@@ -89,7 +88,6 @@ pub fn compress_bytes(
 /// ```
 #[pyfunction]
 #[pyo3(signature = (data, password=None, max_size=None, max_ratio=None))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 pub fn decompress_bytes(
     py: Python<'_>,
     data: Vec<u8>,
@@ -99,7 +97,7 @@ pub fn decompress_bytes(
 ) -> PyResult<Vec<(String, Vec<u8>)>> {
     use crate::compression::{DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_DECOMPRESSED_SIZE};
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let pwd = password.map(|s| s.to_string());
 
     // Use provided limits or defaults (0 means u64::MAX for unlimited)
@@ -115,7 +113,7 @@ pub fn decompress_bytes(
     };
 
     // Release GIL during CPU-intensive decompression
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         crate::compression::decompress_bytes_with_limits(
             &data,
             pwd.as_deref(),

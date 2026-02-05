@@ -38,8 +38,7 @@ impl Read for PyReader<'_> {
             .map_err(|e| io::Error::other(e.to_string()))?;
 
         // Try to cast to PyBytes first for zero-copy access
-        #[allow(deprecated)] // downcast is deprecated but cast() has different semantics
-        if let Ok(py_bytes) = result.downcast::<PyBytes>() {
+        if let Ok(py_bytes) = result.cast::<PyBytes>() {
             let bytes = py_bytes.as_bytes();
             let bytes_read = bytes.len();
 

@@ -30,7 +30,7 @@ wheels/
 env/
 venv/
 ENV/
-
+COVERAGE_*.md
 # IDE
 .idea/
 .vscode/

@@ -25,7 +25,7 @@ use crate::error::RustyZipError;
 ///     elif e.code == ErrorCode.ZIP_BOMB_DETECTED:
 ///         print("ZIP bomb detected!")
 /// ```
-#[pyclass(module = "rustyzip", eq, eq_int)]
+#[pyclass(module = "rustyzip", eq, eq_int, from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
     /// Generic IO error

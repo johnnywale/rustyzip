@@ -27,7 +27,6 @@ use std::path::Path;
 /// when a password is provided, matching pyminizip's behavior.
 #[pyfunction]
 #[pyo3(signature = (src, src_prefix, dst, password, compress_level))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 pub fn compress(
     py: Python<'_>,
     src: &Bound<'_, PyAny>,
@@ -66,13 +65,13 @@ pub fn compress(
         EncryptionMethod::None
     };
 
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let output = dst.to_string();
     let pwd = password.map(|s| s.to_string());
     let level = CompressionLevel::new(compress_level);
 
     // Release GIL during CPU-intensive compression
-    py.allow_threads(|| {
+    py.detach(|| {
         let path_bufs: Vec<std::path::PathBuf> =
             paths.iter().map(std::path::PathBuf::from).collect();
         let path_refs: Vec<&Path> = path_bufs.iter().map(|p| p.as_path()).collect();
@@ -133,7 +132,6 @@ pub fn compress(
 /// ```
 #[pyfunction]
 #[pyo3(signature = (src, password, dst, withoutpath, max_size=None, max_ratio=None, allow_symlinks=false))]
-#[allow(deprecated)] // allow_threads is deprecated but works correctly
 #[allow(clippy::too_many_arguments)]
 pub fn uncompress(
     py: Python<'_>,
@@ -145,7 +143,7 @@ pub fn uncompress(
     max_ratio: Option<u64>,
     allow_symlinks: bool,
 ) -> PyResult<()> {
-    // Convert to owned data for use in allow_threads closure
+    // Convert to owned data for use in detach closure
     let input = src.to_string();
     let output = dst.to_string();
     let pwd = password.map(|s| s.to_string());
@@ -170,7 +168,7 @@ pub fn uncompress(
     let _ = allow_symlinks;
 
     // Release GIL during CPU-intensive decompression
-    py.allow_threads(|| {
+    py.detach(|| {
         crate::compression::decompress_file_with_limits(
             Path::new(&input),
             Path::new(&output),
