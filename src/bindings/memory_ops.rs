@@ -36,7 +36,7 @@ pub fn compress_bytes(
     compression_level: u32,
     suppress_warning: bool,
 ) -> PyResult<Vec<u8>> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {

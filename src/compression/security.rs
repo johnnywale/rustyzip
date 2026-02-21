@@ -316,15 +316,8 @@ pub fn validate_archive_entry_name(name: &str) -> Result<()> {
         }
     }
 
-    // Reject Windows reserved characters for cross-platform compatibility
-    if let Some(c) = name.chars().find(|c| WINDOWS_RESERVED_CHARS.contains(c)) {
-        return Err(RustyZipError::InvalidPath(format!(
-            "Archive name contains reserved character '{}': {}",
-            c, name
-        )));
-    }
-
-    // Reject absolute paths
+    // Reject absolute paths (check before reserved characters so "C:\..."
+    // is reported as path traversal, not as containing reserved ':')
     if name.starts_with('/') || name.starts_with('\\') {
         return Err(RustyZipError::PathTraversal(format!(
             "Absolute path in archive name: {}",
@@ -337,6 +330,14 @@ pub fn validate_archive_entry_name(name: &str) -> Result<()> {
         return Err(RustyZipError::PathTraversal(format!(
             "Absolute path in archive name: {}",
             name
+        )));
+    }
+
+    // Reject Windows reserved characters for cross-platform compatibility
+    if let Some(c) = name.chars().find(|c| WINDOWS_RESERVED_CHARS.contains(c)) {
+        return Err(RustyZipError::InvalidPath(format!(
+            "Archive name contains reserved character '{}': {}",
+            c, name
         )));
     }
 

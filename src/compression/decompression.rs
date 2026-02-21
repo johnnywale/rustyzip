@@ -220,7 +220,6 @@ pub fn decompress_file_with_limits(
     }
 
     let file = File::open(input_path)?;
-    let _compressed_size = file.metadata()?.len();
     let mut archive = ZipArchive::new(file)?;
 
     // Create output directory if it doesn't exist
@@ -280,11 +279,13 @@ pub fn decompress_file_with_limits(
         let file_compressed_size = file.compressed_size();
 
         // Early ratio check based on declared sizes
-        if file_compressed_size > 0 {
+        // Use multiplication instead of division to avoid truncation:
+        // declared_size / compressed_size > max_ratio  =>  declared_size > max_ratio * compressed_size
+        if file_compressed_size > 0
+            && declared_size > max_ratio.saturating_mul(file_compressed_size)
+        {
             let ratio = declared_size / file_compressed_size;
-            if ratio > max_ratio {
-                return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
-            }
+            return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
         }
 
         // Early size check based on declared size
@@ -421,7 +422,6 @@ pub fn decompress_bytes_with_limits(
     max_size: u64,
     max_ratio: u64,
 ) -> Result<Vec<(String, Vec<u8>)>> {
-    let _compressed_size = data.len() as u64;
     let cursor = Cursor::new(data);
     let mut archive = ZipArchive::new(cursor)?;
 
@@ -460,11 +460,12 @@ pub fn decompress_bytes_with_limits(
         let file_compressed_size = file.compressed_size();
 
         // Early ratio check
-        if file_compressed_size > 0 {
+        // Use multiplication instead of division to avoid truncation
+        if file_compressed_size > 0
+            && declared_size > max_ratio.saturating_mul(file_compressed_size)
+        {
             let ratio = declared_size / file_compressed_size;
-            if ratio > max_ratio {
-                return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
-            }
+            return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
         }
 
         // Early size check

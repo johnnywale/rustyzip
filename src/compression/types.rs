@@ -23,8 +23,7 @@ impl EncryptionMethod {
     /// # Errors
     /// Returns an error if the string doesn't match a known encryption method.
     /// Note: `Mixed` cannot be parsed from a string as it's only used for detection results.
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &str) -> Result<Self> {
+    pub fn parse(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "aes256" | "aes" | "aes-256" => Ok(EncryptionMethod::Aes256),
             "zipcrypto" | "zip_crypto" | "legacy" => Ok(EncryptionMethod::ZipCrypto),
@@ -149,20 +148,15 @@ impl Default for CompressionLevel {
 }
 
 impl CompressionLevel {
-    #[allow(dead_code)]
     pub const STORE: CompressionLevel = CompressionLevel(0);
-    #[allow(dead_code)]
     pub const FAST: CompressionLevel = CompressionLevel(1);
-    #[allow(dead_code)]
     pub const DEFAULT: CompressionLevel = CompressionLevel(6);
-    #[allow(dead_code)]
     pub const BEST: CompressionLevel = CompressionLevel(9);
 
     pub fn new(level: u32) -> Self {
         CompressionLevel(level.min(9))
     }
 
-    #[allow(dead_code)]
     pub fn to_flate2_compression(self) -> flate2::Compression {
         flate2::Compression::new(self.0)
     }

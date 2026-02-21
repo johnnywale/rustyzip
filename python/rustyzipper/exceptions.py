@@ -24,7 +24,7 @@ Example usage:
     ...     print(f"Error: {e}, Code: {e.code}")
 """
 
-from typing import Optional, Type
+from typing import Dict, Optional, Type
 
 # Import the Rust extension module
 from . import rustyzip as _rust
@@ -108,15 +108,11 @@ class InvalidPasswordError(RustyZipError, ValueError):
     pass
 
 
-class FileNotFoundError(RustyZipError, IOError):
+class RustyFileNotFoundError(RustyZipError, IOError):
     """Raised when a specified file is not found.
 
     Also inherits from IOError for compatibility with code that
     catches IOError for file operations.
-
-    Note: This shadows the built-in FileNotFoundError. Import explicitly
-    if you need both:
-        from rustyzipper.exceptions import FileNotFoundError as RustyFileNotFoundError
     """
 
     pass
@@ -173,12 +169,12 @@ class SymlinkError(SecurityError):
 # =============================================================================
 
 # Map ErrorCode values to exception classes
-_CODE_TO_EXCEPTION: dict[ErrorCode, Type[RustyZipError]] = {
+_CODE_TO_EXCEPTION: Dict[ErrorCode, Type[RustyZipError]] = {
     ErrorCode.IoError: RustyZipError,
     ErrorCode.ZipError: RustyZipError,
     ErrorCode.InvalidPassword: InvalidPasswordError,
     ErrorCode.UnsupportedEncryption: UnsupportedEncryptionError,
-    ErrorCode.FileNotFound: FileNotFoundError,
+    ErrorCode.FileNotFound: RustyFileNotFoundError,
     ErrorCode.InvalidPath: RustyZipError,
     ErrorCode.PatternError: RustyZipError,
     ErrorCode.WalkDirError: RustyZipError,
@@ -216,7 +212,7 @@ __all__ = [
     "CompressionError",
     "DecompressionError",
     "InvalidPasswordError",
-    "FileNotFoundError",
+    "RustyFileNotFoundError",
     "UnsupportedEncryptionError",
     "SecurityError",
     "PathTraversalError",

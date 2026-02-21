@@ -54,8 +54,8 @@ fn rustyzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Archive modification functions
     bindings::register_modification_functions(m)?;
 
-    // Add version
-    m.add("__version__", "1.0.0")?;
+    // Add version (read from Cargo.toml at compile time)
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     Ok(())
 }

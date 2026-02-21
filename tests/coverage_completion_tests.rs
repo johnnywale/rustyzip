@@ -298,59 +298,56 @@ fn test_encryption_method_default() {
 fn test_encryption_method_from_str() {
     // Test various string formats
     assert_eq!(
-        EncryptionMethod::from_str("none").unwrap(),
+        EncryptionMethod::parse("none").unwrap(),
         EncryptionMethod::None
     );
     assert_eq!(
-        EncryptionMethod::from_str("None").unwrap(),
+        EncryptionMethod::parse("None").unwrap(),
         EncryptionMethod::None
     );
     assert_eq!(
-        EncryptionMethod::from_str("NONE").unwrap(),
+        EncryptionMethod::parse("NONE").unwrap(),
         EncryptionMethod::None
     );
-    assert_eq!(
-        EncryptionMethod::from_str("").unwrap(),
-        EncryptionMethod::None
-    );
+    assert_eq!(EncryptionMethod::parse("").unwrap(), EncryptionMethod::None);
 
     assert_eq!(
-        EncryptionMethod::from_str("zipcrypto").unwrap(),
+        EncryptionMethod::parse("zipcrypto").unwrap(),
         EncryptionMethod::ZipCrypto
     );
     assert_eq!(
-        EncryptionMethod::from_str("ZipCrypto").unwrap(),
+        EncryptionMethod::parse("ZipCrypto").unwrap(),
         EncryptionMethod::ZipCrypto
     );
     assert_eq!(
-        EncryptionMethod::from_str("zip_crypto").unwrap(),
+        EncryptionMethod::parse("zip_crypto").unwrap(),
         EncryptionMethod::ZipCrypto
     );
     assert_eq!(
-        EncryptionMethod::from_str("legacy").unwrap(),
+        EncryptionMethod::parse("legacy").unwrap(),
         EncryptionMethod::ZipCrypto
     );
 
     assert_eq!(
-        EncryptionMethod::from_str("aes256").unwrap(),
+        EncryptionMethod::parse("aes256").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("Aes256").unwrap(),
+        EncryptionMethod::parse("Aes256").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("AES-256").unwrap(),
+        EncryptionMethod::parse("AES-256").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("aes").unwrap(),
+        EncryptionMethod::parse("aes").unwrap(),
         EncryptionMethod::Aes256
     );
 
     // Invalid
-    assert!(EncryptionMethod::from_str("invalid").is_err());
-    assert!(EncryptionMethod::from_str("unknown").is_err());
+    assert!(EncryptionMethod::parse("invalid").is_err());
+    assert!(EncryptionMethod::parse("unknown").is_err());
 }
 
 #[test]

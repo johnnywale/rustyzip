@@ -73,7 +73,7 @@ pub fn add_bytes_to_zip_with_time<W: Write + Seek>(
             zip.start_file(archive_name, options)?;
         }
         (Some(pwd), EncryptionMethod::ZipCrypto) => {
-            let options = base_options.with_deprecated_encryption(pwd.as_bytes())?;
+            let options = base_options.with_deprecated_encryption(pwd.as_bytes());
             zip.start_file(archive_name, options)?;
         }
         _ => {
@@ -181,7 +181,7 @@ where
             zip.start_file(archive_name, options)?;
         }
         (Some(pwd), EncryptionMethod::ZipCrypto) => {
-            let options = base_options.with_deprecated_encryption(pwd.as_bytes())?;
+            let options = base_options.with_deprecated_encryption(pwd.as_bytes());
             zip.start_file(archive_name, options)?;
         }
         _ => {

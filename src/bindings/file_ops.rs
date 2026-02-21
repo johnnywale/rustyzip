@@ -91,7 +91,7 @@ pub fn compress_file(
     compression_level: u32,
     suppress_warning: bool,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
@@ -144,7 +144,7 @@ pub fn compress_files(
     compression_level: u32,
     suppress_warning: bool,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
@@ -207,7 +207,7 @@ pub fn compress_directory(
     exclude_patterns: Option<Vec<String>>,
     suppress_warning: bool,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {
