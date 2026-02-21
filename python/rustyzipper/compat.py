@@ -43,7 +43,7 @@ Note:
 
 from typing import Callable, List, Optional, Union
 
-from rustyzipper import rustyzip as _rust
+from . import rustyzip as _rust
 
 
 class _PyminizipCompat:

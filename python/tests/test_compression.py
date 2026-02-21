@@ -2699,7 +2699,7 @@ class TestDetectEncryption:
 
     def test_detect_encryption_file_not_found(self, temp_dir):
         """Test detect_encryption raises error for non-existent file."""
-        with pytest.raises(Exception):  # Should raise IOError or FileNotFoundError
+        with pytest.raises(FileNotFoundException):
             detect_encryption(os.path.join(temp_dir, "nonexistent.zip"))
 
     def test_detect_encryption_multiple_files_aes256(self):

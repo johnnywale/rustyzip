@@ -50,52 +50,49 @@ fn test_compression_level_to_flate2() {
 fn test_encryption_method_from_str_all_variants() {
     // Test all valid inputs
     assert_eq!(
-        EncryptionMethod::from_str("aes256").unwrap(),
+        EncryptionMethod::parse("aes256").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("aes").unwrap(),
+        EncryptionMethod::parse("aes").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("aes-256").unwrap(),
+        EncryptionMethod::parse("aes-256").unwrap(),
         EncryptionMethod::Aes256
     );
     assert_eq!(
-        EncryptionMethod::from_str("AES256").unwrap(),
+        EncryptionMethod::parse("AES256").unwrap(),
         EncryptionMethod::Aes256
     );
 
     assert_eq!(
-        EncryptionMethod::from_str("zipcrypto").unwrap(),
+        EncryptionMethod::parse("zipcrypto").unwrap(),
         EncryptionMethod::ZipCrypto
     );
     assert_eq!(
-        EncryptionMethod::from_str("zip_crypto").unwrap(),
+        EncryptionMethod::parse("zip_crypto").unwrap(),
         EncryptionMethod::ZipCrypto
     );
     assert_eq!(
-        EncryptionMethod::from_str("legacy").unwrap(),
+        EncryptionMethod::parse("legacy").unwrap(),
         EncryptionMethod::ZipCrypto
     );
 
     assert_eq!(
-        EncryptionMethod::from_str("none").unwrap(),
+        EncryptionMethod::parse("none").unwrap(),
         EncryptionMethod::None
     );
-    assert_eq!(
-        EncryptionMethod::from_str("").unwrap(),
-        EncryptionMethod::None
-    );
+    assert_eq!(EncryptionMethod::parse("").unwrap(), EncryptionMethod::None);
 }
 
 #[test]
 fn test_encryption_method_invalid_strings() {
-    assert!(EncryptionMethod::from_str("invalid").is_err());
-    assert!(EncryptionMethod::from_str("aes128").is_err());
-    assert!(EncryptionMethod::from_str("des").is_err());
-    assert!(EncryptionMethod::from_str("rsa").is_err());
-    assert!(EncryptionMethod::from_str("mixed").is_err());
+    assert!(EncryptionMethod::parse("invalid").is_err());
+    assert!(EncryptionMethod::parse("aes128").is_err());
+    assert!(EncryptionMethod::parse("des").is_err());
+    assert!(EncryptionMethod::parse("rsa").is_err());
+    assert!(EncryptionMethod::parse("mixed").is_err());
 }
 
 #[test]

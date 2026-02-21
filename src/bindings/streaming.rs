@@ -46,7 +46,7 @@ pub fn compress_stream(
     compression_level: u32,
     suppress_warning: bool,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
 
     // Warn about weak encryption
     if enc_method == EncryptionMethod::ZipCrypto && password.is_some() && !suppress_warning {

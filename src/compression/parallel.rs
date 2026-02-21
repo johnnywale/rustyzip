@@ -28,11 +28,11 @@ use crate::error::{Result, RustyZipError};
 use glob::Pattern;
 use rayon::prelude::*;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::path::Path;
 use std::sync::OnceLock;
 use walkdir::WalkDir;
-use zip::ZipWriter;
+use zip::{ZipArchive, ZipWriter};
 
 /// Default maximum file size for parallel loading (10 MB)
 /// Files larger than this will be processed sequentially to avoid OOM
@@ -171,11 +171,28 @@ fn get_thread_pool() -> &'static rayon::ThreadPool {
     })
 }
 
-/// Holds pre-compressed file data for parallel compression
-struct CompressedFileData {
+/// Holds a pre-compressed single-entry mini-ZIP for parallel merge.
+/// Each entry is already compressed and encrypted by a worker thread.
+struct PreCompressedEntry {
+    /// Serialized mini-ZIP containing one compressed+encrypted entry
+    zip_bytes: Vec<u8>,
+}
+
+/// Raw file data loaded in parallel for sequential compression.
+/// Used as a fallback for ZipCrypto encryption which is incompatible with raw_copy_file.
+struct RawFileData {
     archive_name: String,
     data: Vec<u8>,
     last_modified: Option<zip::DateTime>,
+}
+
+/// Result of parallel chunk processing — either pre-compressed mini-ZIPs
+/// (for AES/no encryption) or raw file data (ZipCrypto fallback).
+enum ChunkResult {
+    /// Pre-compressed entries ready for raw_copy_file merge
+    PreCompressed(Vec<PreCompressedEntry>),
+    /// Raw data for sequential compression (ZipCrypto fallback)
+    Raw(Vec<RawFileData>),
 }
 
 /// Represents a file that's too large for parallel memory loading
@@ -219,37 +236,75 @@ fn partition_into_bounded_chunks(files: Vec<FileInfo>, max_chunk_size: u64) -> V
     chunks
 }
 
-/// Process a chunk of files in parallel and return the compressed data.
+/// Process a chunk of files in parallel.
+///
+/// For AES-256 and unencrypted archives, each worker creates a pre-compressed
+/// mini-ZIP entry (true parallel compression). For ZipCrypto, files are read
+/// in parallel but compressed sequentially, as ZipCrypto entries are not
+/// compatible with `raw_copy_file`.
 fn process_chunk_parallel(
     chunk: Vec<FileInfo>,
     config: &ParallelConfig,
-) -> std::result::Result<Vec<CompressedFileData>, RustyZipError> {
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> std::result::Result<ChunkResult, RustyZipError> {
+    // ZipCrypto entries are not compatible with raw_copy_file, so fall back
+    // to parallel-read + sequential-compress for that encryption method
+    let use_mini_zip = !matches!(
+        (password, encryption),
+        (Some(_), EncryptionMethod::ZipCrypto)
+    );
+
     let thread_count = config.effective_thread_count();
 
-    // Use a custom thread pool if thread count differs from default
-    if config.thread_count != 0 {
-        // Build a temporary pool with the specified thread count
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(thread_count)
-            .build()
-            .map_err(|e| {
-                RustyZipError::Io(std::io::Error::other(format!(
-                    "Failed to create thread pool: {}",
-                    e
-                )))
-            })?;
-
-        pool.install(|| process_files_parallel(&chunk))
+    if use_mini_zip {
+        let entries = if config.thread_count != 0 {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(thread_count)
+                .build()
+                .map_err(|e| {
+                    RustyZipError::Io(std::io::Error::other(format!(
+                        "Failed to create thread pool: {}",
+                        e
+                    )))
+                })?;
+            pool.install(|| {
+                compress_files_parallel_inner(&chunk, password, encryption, compression_level)
+            })
+        } else {
+            get_thread_pool().install(|| {
+                compress_files_parallel_inner(&chunk, password, encryption, compression_level)
+            })
+        }?;
+        Ok(ChunkResult::PreCompressed(entries))
     } else {
-        // Use the default compression pool
-        get_thread_pool().install(|| process_files_parallel(&chunk))
+        let data = if config.thread_count != 0 {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(thread_count)
+                .build()
+                .map_err(|e| {
+                    RustyZipError::Io(std::io::Error::other(format!(
+                        "Failed to create thread pool: {}",
+                        e
+                    )))
+                })?;
+            pool.install(|| read_files_parallel(&chunk))
+        } else {
+            get_thread_pool().install(|| read_files_parallel(&chunk))
+        }?;
+        Ok(ChunkResult::Raw(data))
     }
 }
 
-/// Internal function to process files in parallel (called within a thread pool context)
-fn process_files_parallel(
+/// True parallel compression: each worker reads, compresses, and encrypts a file
+/// into a single-entry mini-ZIP. Used for AES-256 and unencrypted archives.
+fn compress_files_parallel_inner(
     chunk: &[FileInfo],
-) -> std::result::Result<Vec<CompressedFileData>, RustyZipError> {
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> std::result::Result<Vec<PreCompressedEntry>, RustyZipError> {
     chunk
         .par_iter()
         .map(|file_info| {
@@ -261,17 +316,89 @@ fn process_files_parallel(
                 .and_then(system_time_to_zip_datetime);
 
             let mut reader = std::io::BufReader::with_capacity(64 * 1024, input_file);
-            // Pre-allocate based on known file size to avoid reallocation churn
             let mut data = Vec::with_capacity(file_info.size as usize);
             reader.read_to_end(&mut data)?;
 
-            Ok(CompressedFileData {
+            // Create a single-entry mini-ZIP with full compression + encryption
+            let cursor = Cursor::new(Vec::new());
+            let mut mini_zip = ZipWriter::new(cursor);
+            add_bytes_to_zip_with_time(
+                &mut mini_zip,
+                &data,
+                &file_info.archive_name,
+                password,
+                encryption,
+                compression_level,
+                last_modified,
+            )?;
+            let cursor = mini_zip.finish()?;
+            let zip_bytes = cursor.into_inner();
+
+            Ok(PreCompressedEntry { zip_bytes })
+        })
+        .collect()
+}
+
+/// Parallel file reading only (ZipCrypto fallback). Files are read and
+/// decompressed in parallel, but ZIP writing happens sequentially.
+fn read_files_parallel(chunk: &[FileInfo]) -> std::result::Result<Vec<RawFileData>, RustyZipError> {
+    chunk
+        .par_iter()
+        .map(|file_info| {
+            let input_file = File::open(&file_info.path)?;
+            let last_modified = input_file
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(system_time_to_zip_datetime);
+
+            let mut reader = std::io::BufReader::with_capacity(64 * 1024, input_file);
+            let mut data = Vec::with_capacity(file_info.size as usize);
+            reader.read_to_end(&mut data)?;
+
+            Ok(RawFileData {
                 archive_name: file_info.archive_name.clone(),
                 data,
                 last_modified,
             })
         })
         .collect()
+}
+
+/// Merge a chunk result into the ZIP writer.
+/// Pre-compressed entries are merged via raw_copy_file (zero re-compression).
+/// Raw data entries are compressed sequentially (ZipCrypto fallback).
+fn merge_chunk_result<W: std::io::Write + std::io::Seek>(
+    zip: &mut ZipWriter<W>,
+    result: ChunkResult,
+    password: Option<&str>,
+    encryption: EncryptionMethod,
+    compression_level: CompressionLevel,
+) -> Result<()> {
+    match result {
+        ChunkResult::PreCompressed(entries) => {
+            for entry in entries {
+                let cursor = Cursor::new(entry.zip_bytes);
+                let mut archive = ZipArchive::new(cursor)?;
+                let raw = archive.by_index_raw(0)?;
+                zip.raw_copy_file(raw)?;
+            }
+        }
+        ChunkResult::Raw(files) => {
+            for file_data in files {
+                add_bytes_to_zip_with_time(
+                    zip,
+                    &file_data.data,
+                    &file_data.archive_name,
+                    password,
+                    encryption,
+                    compression_level,
+                    file_data.last_modified,
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Compress a directory to a ZIP archive using parallel processing
@@ -436,28 +563,26 @@ pub fn compress_directory_parallel_with_config(
     // This prevents memory spikes when many files are just under the threshold
     let chunks = partition_into_bounded_chunks(small_files, config.memory_limit);
 
-    // Process each chunk in parallel, then write results before processing next chunk
-    // This ensures memory is bounded by config.memory_limit at any time
-    let mut all_compressed_files: Vec<CompressedFileData> = Vec::new();
-    for chunk in chunks {
-        let compressed_chunk = process_chunk_parallel(chunk, config)?;
-        all_compressed_files.extend(compressed_chunk);
-    }
-
-    // Write to ZIP sequentially (ZIP format requires sequential writes)
+    // Create ZIP writer before the chunk loop so each chunk's results
+    // are written immediately, reducing peak memory
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
 
-    // First write the small files that were compressed in parallel
-    for file_data in all_compressed_files {
-        add_bytes_to_zip_with_time(
-            &mut zip,
-            &file_data.data,
-            &file_data.archive_name,
+    // Process each chunk in parallel, then merge immediately
+    for chunk in chunks {
+        let result = process_chunk_parallel(
+            chunk,
+            config,
             options.password,
             options.encryption,
             options.compression_level,
-            file_data.last_modified,
+        )?;
+        merge_chunk_result(
+            &mut zip,
+            result,
+            options.password,
+            options.encryption,
+            options.compression_level,
         )?;
     }
 
@@ -564,28 +689,16 @@ pub fn compress_files_parallel_with_config(
     // Partition small files into bounded chunks to cap memory usage
     let chunks = partition_into_bounded_chunks(small_files, config.memory_limit);
 
-    // Process each chunk in parallel, then collect results
-    let mut all_compressed_files: Vec<CompressedFileData> = Vec::new();
-    for chunk in chunks {
-        let compressed_chunk = process_chunk_parallel(chunk, config)?;
-        all_compressed_files.extend(compressed_chunk);
-    }
-
-    // Write to ZIP sequentially
+    // Create ZIP writer before the chunk loop so each chunk's results
+    // are written immediately, reducing peak memory
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
 
-    // First write the small files that were compressed in parallel
-    for file_data in all_compressed_files {
-        add_bytes_to_zip_with_time(
-            &mut zip,
-            &file_data.data,
-            &file_data.archive_name,
-            password,
-            encryption,
-            compression_level,
-            file_data.last_modified,
-        )?;
+    // Process each chunk in parallel, then merge immediately
+    for chunk in chunks {
+        let result =
+            process_chunk_parallel(chunk, config, password, encryption, compression_level)?;
+        merge_chunk_result(&mut zip, result, password, encryption, compression_level)?;
     }
 
     // Then process large files sequentially using streaming (memory safe)

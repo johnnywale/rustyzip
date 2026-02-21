@@ -25,6 +25,8 @@ from rustyzipper import (
     ArchiveInfo,
     EncryptionMethod,
     CompressionLevel,
+    FileNotFoundException,
+    RustyZipException,
 )
 
 
@@ -170,7 +172,7 @@ class TestListArchive:
 
     def test_list_archive_not_found(self) -> None:
         """Test listing non-existent archive."""
-        with pytest.raises(Exception):
+        with pytest.raises(FileNotFoundException):
             list_archive("/nonexistent/archive.zip")
 
     def test_list_archive_bytes(self, tmp_path: Path) -> None:
@@ -336,7 +338,7 @@ class TestGetFileInfo:
         archive_path.write_bytes(zip_data)
 
         # Try to get non-existent file
-        with pytest.raises(Exception):
+        with pytest.raises(FileNotFoundException):
             get_file_info(str(archive_path), "nonexistent.txt")
 
     def test_get_file_info_bytes(self) -> None:

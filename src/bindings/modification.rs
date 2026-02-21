@@ -32,7 +32,7 @@ pub fn add_to_archive(
     encryption: &str,
     compression_level: u32,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
     let level = CompressionLevel::new(compression_level);
 
     let file_paths: Vec<&Path> = files.iter().map(|s| Path::new(s.as_str())).collect();
@@ -76,7 +76,7 @@ pub fn add_bytes_to_archive(
     encryption: &str,
     compression_level: u32,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
     let level = CompressionLevel::new(compression_level);
 
     compression::add_bytes_to_archive(
@@ -161,7 +161,7 @@ pub fn update_in_archive(
     encryption: &str,
     compression_level: u32,
 ) -> PyResult<()> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
     let level = CompressionLevel::new(compression_level);
 
     compression::update_in_archive(
@@ -202,7 +202,7 @@ pub fn add_to_archive_bytes<'py>(
     encryption: &str,
     compression_level: u32,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
     let level = CompressionLevel::new(compression_level);
 
     // Convert to the format expected by the Rust function
@@ -290,7 +290,7 @@ pub fn update_in_archive_bytes<'py>(
     encryption: &str,
     compression_level: u32,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let enc_method = EncryptionMethod::from_str(encryption)?;
+    let enc_method = EncryptionMethod::parse(encryption)?;
     let level = CompressionLevel::new(compression_level);
 
     let result = compression::update_in_archive_bytes(

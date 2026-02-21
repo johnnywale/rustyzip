@@ -26,6 +26,10 @@ from rustyzipper import (
     update_in_archive_bytes,
     EncryptionMethod,
     CompressionLevel,
+    # Exceptions
+    RustyZipException,
+    FileNotFoundException,
+    PathTraversalException,
 )
 
 
@@ -93,7 +97,7 @@ class TestAddToArchive:
         file1.write_text("Content")
         archive = tmp_path / "nonexistent.zip"
 
-        with pytest.raises(Exception):  # FileNotFoundError
+        with pytest.raises(FileNotFoundException):
             add_to_archive(str(archive), [str(file1)], ["file1.txt"])
 
     def test_add_mismatched_lengths(self, tmp_path: Path) -> None:
@@ -106,7 +110,7 @@ class TestAddToArchive:
         file2 = tmp_path / "file2.txt"
         file2.write_text("Content 2")
 
-        with pytest.raises(Exception):  # ValueError
+        with pytest.raises(RustyZipException):
             add_to_archive(str(archive), [str(file2)], ["name1.txt", "name2.txt"])
 
 
@@ -259,7 +263,7 @@ class TestRenameInArchive:
         archive = tmp_path / "test.zip"
         archive.write_bytes(archive_data)
 
-        with pytest.raises(Exception):  # FileNotFoundError
+        with pytest.raises(FileNotFoundException):
             rename_in_archive(str(archive), "nonexistent.txt", "new.txt")
 
 
@@ -327,7 +331,7 @@ class TestUpdateInArchive:
         archive = tmp_path / "test.zip"
         archive.write_bytes(archive_data)
 
-        with pytest.raises(Exception):  # FileNotFoundError
+        with pytest.raises(FileNotFoundException):
             update_in_archive(str(archive), "nonexistent.txt", b"New content")
 
 
@@ -636,7 +640,7 @@ class TestEdgeCases:
 
         # Adding a file with the same name should raise an error
         # (the zip crate doesn't allow duplicate filenames)
-        with pytest.raises(Exception):
+        with pytest.raises(RustyZipException):
             add_bytes_to_archive(
                 str(archive),
                 b"Duplicate",
@@ -801,7 +805,7 @@ class TestErrorConditions:
         archive = tmp_path / "test.zip"
         archive.write_bytes(archive_data)
 
-        with pytest.raises(Exception):
+        with pytest.raises(FileNotFoundException):
             add_to_archive(
                 str(archive),
                 [str(tmp_path / "nonexistent.txt")],
@@ -812,16 +816,16 @@ class TestErrorConditions:
         """Test bytes variants with invalid archive data."""
         invalid_data = b"This is not a valid ZIP file"
 
-        with pytest.raises(Exception):
+        with pytest.raises(RustyZipException):
             add_to_archive_bytes(invalid_data, [(b"content", "file.txt")])
 
-        with pytest.raises(Exception):
+        with pytest.raises(RustyZipException):
             remove_from_archive_bytes(invalid_data, ["file.txt"])
 
-        with pytest.raises(Exception):
+        with pytest.raises(RustyZipException):
             rename_in_archive_bytes(invalid_data, "old.txt", "new.txt")
 
-        with pytest.raises(Exception):
+        with pytest.raises(RustyZipException):
             update_in_archive_bytes(invalid_data, "file.txt", b"content")
 
     def test_empty_file_list_add(self, tmp_path: Path) -> None:
@@ -873,15 +877,13 @@ class TestSecurityPathTraversal:
         ]
 
         for name in malicious_names:
-            with pytest.raises(Exception) as exc_info:
+            with pytest.raises(PathTraversalException):
                 add_bytes_to_archive(
                     str(archive),
                     b"Malicious content",
                     name,
                     encryption=EncryptionMethod.NONE,
                 )
-            # Verify it's a path traversal error
-            assert "traversal" in str(exc_info.value).lower() or "path" in str(exc_info.value).lower()
 
     def test_add_rejects_absolute_paths(self, tmp_path: Path) -> None:
         """Test that add_bytes_to_archive rejects absolute paths."""
@@ -898,7 +900,7 @@ class TestSecurityPathTraversal:
         ]
 
         for name in absolute_paths:
-            with pytest.raises(Exception):
+            with pytest.raises(PathTraversalException):
                 add_bytes_to_archive(
                     str(archive),
                     b"Malicious content",
@@ -914,7 +916,7 @@ class TestSecurityPathTraversal:
         archive = tmp_path / "test.zip"
         archive.write_bytes(archive_data)
 
-        with pytest.raises(Exception):
+        with pytest.raises(PathTraversalException):
             add_bytes_to_archive(
                 str(archive),
                 b"Content",
@@ -930,7 +932,7 @@ class TestSecurityPathTraversal:
         archive = tmp_path / "test.zip"
         archive.write_bytes(archive_data)
 
-        with pytest.raises(Exception):
+        with pytest.raises(PathTraversalException):
             rename_in_archive(str(archive), "file.txt", "../../../etc/malicious.txt")
 
     def test_add_to_archive_rejects_path_traversal(self, tmp_path: Path) -> None:
@@ -945,7 +947,7 @@ class TestSecurityPathTraversal:
         new_file = tmp_path / "new.txt"
         new_file.write_text("Content")
 
-        with pytest.raises(Exception):
+        with pytest.raises(PathTraversalException):
             add_to_archive(
                 str(archive),
                 [str(new_file)],
@@ -960,7 +962,7 @@ class TestSecurityPathTraversal:
         ], encryption=EncryptionMethod.NONE)
 
         # add_to_archive_bytes
-        with pytest.raises(Exception):
+        with pytest.raises(PathTraversalException):
             add_to_archive_bytes(
                 archive_data,
                 [(b"Malicious", "../../../passwd")],
@@ -968,7 +970,7 @@ class TestSecurityPathTraversal:
             )
 
         # rename_in_archive_bytes
-        with pytest.raises(Exception):
+        with pytest.raises(PathTraversalException):
             rename_in_archive_bytes(archive_data, "file.txt", "../../../malicious")
 
     def test_safe_paths_still_work(self, tmp_path: Path) -> None:
