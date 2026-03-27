@@ -52,7 +52,7 @@ jobs:
           cargo llvm-cov report --lcov --output-path lcov-rust.info
 
       - name: Upload Rust coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov-rust.info
@@ -120,7 +120,7 @@ jobs:
         run: pytest -v --import-mode=importlib --cov=rustyzipper --cov-report=xml --cov-report=term-missing
 
       - name: Upload Python coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
