@@ -121,11 +121,11 @@ where
 
         // Check compression ratio
         let file_compressed_size = file.compressed_size();
-        if file_compressed_size > 0 {
+        if file_compressed_size > 0
+            && uncompressed_size > max_ratio.saturating_mul(file_compressed_size)
+        {
             let ratio = uncompressed_size / file_compressed_size;
-            if ratio > max_ratio {
-                return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
-            }
+            return Err(RustyZipError::SuspiciousCompressionRatio(ratio, max_ratio));
         }
 
         let name = file.name().to_string();

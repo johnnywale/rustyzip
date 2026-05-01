@@ -11,12 +11,13 @@ use zip::{AesMode, CompressionMethod, ZipWriter};
 
 /// Convert a SystemTime to zip::DateTime
 pub fn system_time_to_zip_datetime(system_time: std::time::SystemTime) -> Option<zip::DateTime> {
-    use time::OffsetDateTime;
+    use time::{OffsetDateTime, PrimitiveDateTime};
 
     let duration = system_time.duration_since(std::time::UNIX_EPOCH).ok()?;
     let datetime = OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64).ok()?;
+    let primitive = PrimitiveDateTime::new(datetime.date(), datetime.time());
 
-    zip::DateTime::try_from(datetime).ok()
+    zip::DateTime::try_from(primitive).ok()
 }
 
 /// Add bytes directly to a ZIP writer
@@ -73,7 +74,7 @@ pub fn add_bytes_to_zip_with_time<W: Write + Seek>(
             zip.start_file(archive_name, options)?;
         }
         (Some(pwd), EncryptionMethod::ZipCrypto) => {
-            let options = base_options.with_deprecated_encryption(pwd.as_bytes());
+            let options = base_options.with_deprecated_encryption(pwd.as_bytes())?;
             zip.start_file(archive_name, options)?;
         }
         _ => {
@@ -181,7 +182,7 @@ where
             zip.start_file(archive_name, options)?;
         }
         (Some(pwd), EncryptionMethod::ZipCrypto) => {
-            let options = base_options.with_deprecated_encryption(pwd.as_bytes());
+            let options = base_options.with_deprecated_encryption(pwd.as_bytes())?;
             zip.start_file(archive_name, options)?;
         }
         _ => {

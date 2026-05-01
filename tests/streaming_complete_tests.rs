@@ -197,7 +197,7 @@ fn create_zip_in_memory(
                 options.with_aes_encryption(zip::AesMode::Aes256, pwd)
             }
             (Some(pwd), EncryptionMethod::ZipCrypto) => {
-                options.with_deprecated_encryption(pwd.as_bytes())
+                options.with_deprecated_encryption(pwd.as_bytes()).unwrap()
             }
             _ => options,
         };
