@@ -360,9 +360,9 @@ pub fn decompress_file_with_limits(
 
         // Set file modification time to match the original
         if let Some(last_modified) = file.last_modified() {
-            use time::OffsetDateTime;
-            if let Ok(time) = OffsetDateTime::try_from(last_modified) {
-                let unix_timestamp = time.unix_timestamp();
+            use time::PrimitiveDateTime;
+            if let Ok(time) = PrimitiveDateTime::try_from(last_modified) {
+                let unix_timestamp = time.assume_utc().unix_timestamp();
                 let mtime = FileTime::from_unix_time(unix_timestamp, 0);
                 // Setting modification time is non-critical, ignore failures
                 let _ = filetime::set_file_mtime(&outpath, mtime);

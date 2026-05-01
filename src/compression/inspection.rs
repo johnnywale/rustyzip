@@ -326,10 +326,10 @@ fn extract_file_info<R: Read>(file: &zip::read::ZipFile<'_, R>) -> FileInfo {
     let compression_method = format!("{:?}", file.compression());
 
     let last_modified = file.last_modified().and_then(|dt| {
-        use time::OffsetDateTime;
-        OffsetDateTime::try_from(dt)
+        use time::PrimitiveDateTime;
+        PrimitiveDateTime::try_from(dt)
             .ok()
-            .map(|t| t.unix_timestamp())
+            .map(|t| t.assume_utc().unix_timestamp())
     });
 
     let unix_mode = file.unix_mode();

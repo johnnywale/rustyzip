@@ -408,7 +408,7 @@ fn copy_archive_comment<R: Read + Seek, W: Write + Seek>(
 ) {
     let comment = source.comment();
     if !comment.is_empty() {
-        dest.set_comment(String::from_utf8_lossy(comment).into_owned());
+        let _ = dest.set_comment(String::from_utf8_lossy(comment).into_owned());
     }
 }
 

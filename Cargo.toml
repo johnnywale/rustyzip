@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 pyo3 = { version = "0.28", features = ["abi3-py38"] }
 
 # Compression
-zip = { version = "7", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
+zip = { version = "8", default-features = false, features = ["deflate", "aes-crypto", "time", "zstd"] }
 flate2 = "1"
 
 # File timestamps
