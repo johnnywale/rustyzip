@@ -34,7 +34,7 @@ jobs:
           - armv7-unknown-linux-gnueabihf
           - i686-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -73,7 +73,7 @@ jobs:
           - aarch64-pc-windows-msvc
           # Removed i686 to avoid 32-bit Python mismatch
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -116,7 +116,7 @@ jobs:
         target:
           - universal2-apple-darwin
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -149,7 +149,7 @@ jobs:
     name: Build Source Distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
 
       - name: Set Release Version
